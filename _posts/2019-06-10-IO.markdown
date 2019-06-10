@@ -1,11 +1,11 @@
 ---
 layout:     post
-title:      "IO模型"
+title:      "LINUX IO模型"
 date:       2019-06-10 22:30:00 +0800
 author:     "simba"
 header-img: "img/post-bg-miui6.jpg"
 tags:
-    - IO
+    - linux
 
 ---
 
