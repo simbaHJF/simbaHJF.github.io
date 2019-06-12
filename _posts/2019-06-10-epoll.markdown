@@ -59,7 +59,7 @@ struct epoll_event {
 * EPOLLONESHOT：只监听一次事件,当监听完这次事件之后,如果还需要继续监听这个socket的话,需要再次把这个socket加入到EPOLL队列里.
 
 
-c.	int epoll_wait(int epfd, struct epoll_event * events, int maxevents, int timeout);
+c.  int epoll_wait(int epfd, struct epoll_event * events, int maxevents, int timeout);
 收集在epoll监控的事件中已经发送的事件.参数events是分配好的epoll_event结构体数组,epoll将会把发生的事件赋值到events数组中(events不可以是空指针,内核只负责把数据复制到这个events数组中,不会去帮助我们在用户态中分配内存).maxevents告之内核这个events有多大，这个 maxevents的值不能大于创建epoll_create()时的size,参数timeout是超时时间(毫秒,0会立即返回,-1将不确定,也有说法说是永久阻塞).如果函数调用成功,返回对应I/O上已准备好的文件描述符数目,如返回0表示已超时.
 
 
