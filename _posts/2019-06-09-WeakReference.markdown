@@ -165,7 +165,7 @@ static class ThreadLocalMap {
 Entry结构就是一种K/V的结构,它的Key是ThreadLocal对象,Value是线程中为该ThreadLocal对象关联的值对象.可以看到,Entry继承了WeakReference,也就是说,它是一个弱引用,这里需要注意的是,它的弱引用是实现在它的Key上的,也就是ThreadLocal对象,它的Value并不是弱引用对象.所以它的弱引用,体现在其Entry结构的Key上,而不是整个Entry结构,也不是Entry下的Value结构,这点要特别注意.
 
 ThreadLocalMap类中,还有个一Entry的列表属性table,这个属性是用作什么的呢?下面来解释一下:
-每个Thread对象内部都有一个ThreadLocal.ThreadLocalMap类型的属性,这是因为一个线程可能会用到多个ThreadLocal,所以就将这些所有用到的ThreadLocal对象都交由ThreadLocal.ThreadLocalMap下的Entry[]来管理.在调用ThreadLocal对象的set方法存入当先线程副本时,就需要知道放到哪个位置的Entry下,而这个这个算index的逻辑也是通过哈希值和table长度来共同决定的,这时就会有发生哈希碰撞的情况,那么ThreadLocalMap是如何解决哈希碰撞的呢,它并没有采用我们熟知的HashMap那种数组加链表或红黑树的这种链地址法来解决哈希碰撞,而是采用开放地址法.
+每个Thread对象内部都有一个ThreadLocal.ThreadLocalMap类型的属性,这是因为一个线程可能会用到多个ThreadLocal,所以就将这些所有用到的ThreadLocal对象都交由ThreadLocal.ThreadLocalMap下的Entry[]来管理.在调用ThreadLocal对象的set方法存入当先线程副本时,就需要知道放到哪个位置的Entry下,而这个算index的逻辑也是通过哈希值和table长度来共同决定的,这时就会有发生哈希碰撞的情况,那么ThreadLocalMap是如何解决哈希碰撞的呢,它并没有采用我们熟知的HashMap那种数组加链表或红黑树的这种链地址法来解决哈希碰撞,而是采用开放地址法.
 ```
 private void set(ThreadLocal<?> key, Object value) {
     // We don't use a fast path as with get() because it is at
@@ -194,7 +194,7 @@ private void set(ThreadLocal<?> key, Object value) {
         rehash();
 }
 ```
-介绍完ThreadLocal的基本情况,来看看为什么ThreadLocal会发生内存泄漏的问题.考虑这样一种情况,当创建很多ThreadLocal对象,或者有大量线程操作一个ThreadLocal对象时,当然这两种情况要加一个前提,那就是线程未死亡.当对ThreadLocal对象的强引用被置null后,由于Entry对象的Key也就是ThreadLocal实现了弱引用,GC会对其进行回收,但是Entry结构中的Value对象却是一个强引用,其被Entry的v属性所引用,从而造成无法被回收,但是由于Key已经被回收了,Value也就找不到了(但它还没法被回收,切切实实的还在内存怼中),这时就造成了内存泄漏.
+介绍完ThreadLocal的基本情况,来看看为什么ThreadLocal会发生内存泄漏的问题.考虑这样一种情况,当创建很多ThreadLocal对象,或者有大量线程操作一个ThreadLocal对象时,当然这两种情况要加一个前提,那就是线程未死亡.当对ThreadLocal对象的强引用被置null后,由于Entry对象的Key也就是ThreadLocal实现了弱引用,GC会对其进行回收,但是Entry结构中的Value对象却是一个强引用,其被Entry的v属性所引用,从而造成无法被回收,但是由于Key已经被回收了,Value也就找不到了(但它还没法被回收,切切实实的还在内存堆中),这时就造成了内存泄漏.
 ##  WeakHashMap
 WeakHashMap内部也实现了一个自己的Entry结构:
 ```
