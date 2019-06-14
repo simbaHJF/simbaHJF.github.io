@@ -1,6 +1,6 @@
 ---
 layout:     post
-title:      "JAVA篇:从WeakReference说起,聊聊ThreadLocal和WeakHashMap的内存泄漏问题"
+title:      "从WeakReference说起,聊聊ThreadLocal和WeakHashMap的内存泄漏问题"
 date:       2019-06-09 16:00:00 +0800
 author:     "simba"
 header-img: "img/post-bg-miui6.jpg"
