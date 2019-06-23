@@ -44,3 +44,7 @@ Reactor多线程模型的特点如下:
 主从Reactor线程模型的特点是:服务端用于接收客户端连接的不再是一个单独的NIO线程,而是一个独立的NIO线程池.Acceptor接收到客户端TCP连接请求并处理完成后(可能包含接入认证等),将新创建的SocketChannel注册到I/O线程池(sub Reactor线程池)的某个I/O线程上,由它负责SocketChannel的读写和编码工作.Acceptor线程池仅仅用于客户端的登录,握手和安全认证,一旦链路建立成功,就将链路注册到后端sub Reactor线程池的I/O线程上,由I/O线程负责后续的I/O操作.它的线程模型如下图所示:
 [![](https://s2.ax1x.com/2019/06/21/VxtIk4.md.png)](https://imgchr.com/i/VxtIk4)
 利用主从NIO线程模型,可以解决一个服务端监听线程无法有效处理所有客户端连接的性能不足问题.Netty的官方推荐采用主从Reactor线程模型.
+
+
+##	Netty的线程模型
+通过设置不同的参数,Netty可以支持Reactor单线程模型,多线程模型和主从Reactor多线程模型
