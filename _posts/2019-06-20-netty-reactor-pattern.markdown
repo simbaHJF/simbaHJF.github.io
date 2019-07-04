@@ -24,8 +24,8 @@ Reactor单线程模型如下图:
 [![](https://s2.ax1x.com/2019/06/20/VxGkod.md.png)](https://imgchr.com/i/VxGkod)
 Reactor单线程模型中,Reactor,Acceptor和Handler在同一个线程中,多路复用器阻塞轮询事件,有事件触发后,调用相应的Handler处理.<br>
 在一些小容量应用场景下,可以使用单线程模型.但是对于高负载,大并发的应用场景不合适,原因如下:
-*	一个NIO线程同时处理成百上千的链路,性能上无法支撑,几遍NIO线程的CPU负荷达到100%,页无法满足海量消息的编码,解码,读取和发送.
-*	当NIO线程负载过重之后,吃力速度将变慢,这会导致大量客户端连接超时,超时之后往往会进行重发,这更加重了NIO线程的负载,最终会导致大量消息积压和处理超时,成为系统的性能瓶颈.
+*	一个NIO线程同时处理成百上千的链路,性能上无法支撑,即便NIO线程的CPU负荷达到100%,也无法满足海量消息的编码,解码,读取和发送.
+*	当NIO线程负载过重之后,处理速度将变慢,这会导致大量客户端连接超时,超时之后往往会进行重发,这更加重了NIO线程的负载,最终会导致大量消息积压和处理超时,成为系统的性能瓶颈.
 *	可靠性问题:一旦NIO线程意外跑飞,或者进入死循环,会导致整个系统通信模块不可用,不能接受和处理外部消息,造成节点故障.
 
 
@@ -47,4 +47,14 @@ Reactor多线程模型的特点如下:
 
 
 ##	Netty的线程模型
-通过设置不同的参数,Netty可以支持Reactor单线程模型,多线程模型和主从Reactor多线程模型
+通过设置不同的参数,Netty可以支持Reactor单线程模型,多线程模型和主从Reactor多线程模型.Netty线程模型的原理图如下:
+![](https://s2.ax1x.com/2019/07/04/ZaCin0.png)
+
+服务端启动的时候,netty通常会创建两个EventLoopGroup,也就是主从Reactor线程模型.
+
+```
+EventLoopGroup bossGroup = new NioEventLoopGroup();
+EventLoopGroup workerGroup = new NioEventLoopGroup();
+```
+
+第一个被称为boss线程组,用于接收连接请求;第二个称为worker线程组,用来处理已连入的连接在其生命周期内所发生的事件(I/O读写操作等).
