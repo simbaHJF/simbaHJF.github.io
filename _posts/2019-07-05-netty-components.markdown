@@ -9,7 +9,11 @@ tags:
 
 ---
 
-##	Channel接口
+> 参考资料:<br>
+netty权威指南<br>
+netty in action
+
+##	Channel
 JDK中的Channel----NIO类库中的一个重要组成部分.java.nio.SocketChannel和java.nio.ServerSocketChannel,用于网络通信中非阻塞的I/O操作.<br>
 
 类似于NIO的Channel,Netty提供了自己的Channel和其子类实现,用于异步I/O操作和其他相关操作.io.netty.channel.Channel是Netty网络操作抽象类,它聚合了一组功能,包括但不限于网络的读,写,连接等操作;也包含了Netty框架相关的一些功能,包括获取该Channel的EventLoop,获取缓冲分配器ByteBufAllocator和pipeline等.<br>
@@ -76,10 +80,31 @@ public class MyInboundHandler extends ChannelHandlerAdapter{
 }
 ```
 
-ChannelHandler的类图如下:
+ChannelHandler的接口方法如下:
 ![](https://s2.ax1x.com/2019/07/05/Zdx2Gj.png)
 
 ChannelHandlerAdapter的继承关系图:
 ![](https://s2.ax1x.com/2019/07/05/ZdxhMq.png)
 
-可以看到ChannelHandlerAdapter是一种典型的Adapter设计模式
+可以看到ChannelHandlerAdapter是一种典型的Adapter设计模式<br>
+
+
+##	EventLoop
+运行任务来处理在连接的生命周期内发生的事件是任何网络框架的基本功能.与之相应的编程上的构造通常被称为事件循环----一个Netty使用了interface io.netty.channel.EventLoop来适配的术语.<br>
+
+事件循环的基本思想,可以用下面代码来简单表示:
+```
+while(!terminated){
+	List<Runnable> readyEvents = blockUntilEventsReady();	//阻塞,直到有事件已经就绪可被运行
+	for(Runnable ev: readyEvents){
+		ev.run();	//循环遍历,并处理所有的事件
+	}
+}
+```
+
+Netty的EventLoop是协同设计的一部分,它采用了两个基本的API:并发和网络编程.首先,io.netty.util.concurrent包构建在JDK的java.util.concurrent包上,用来提供线程执行器.其次,io.netty.channel包中的类,为了与Channel的事件进行交互,扩展了这些接口/类.下图展示了相应的类层次结构:
+![](https://s2.ax1x.com/2019/07/06/Z0p6N8.png)
+
+在这个模型中,一个EventLoop将由一个永远都不会改变的Thread驱动,同时任务(Runnable或者Callable)可以直接提交给EventLoop实现,以立即执行或者调度执行,可以理解为:它内部有一个 Thread thread 属性, 存储了一个本地 Java 线程,一个 NioEventLoop 其实和一个特定的线程绑定, 并且在其生命周期内, 绑定的线程都不会再改变.根据配置和可用核心的不同,可能会创建多个EventLoop实例泳衣优化资源的使用,并且单个EventLoop可能会被指派用于服务多个Channel.<br>
+
+作为NIO框架的Reactor线程,NioEventLoop需要处理网络I/O读写事件,因此它必须内部聚合一个多路复用器对象.可以理解为:每个EventLoop内部维护着一个Selector实例.前面的事件循环的基本思想在NioEventLoop内部,就是通过这个Selector来实现的.

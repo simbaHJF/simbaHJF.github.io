@@ -1,6 +1,6 @@
 ---
 layout:     post
-title:      "reactor线程模型"
+title:      "reactor线程模型和netty线程模型"
 date:       2019-06-17 13:30:00 +0800
 author:     "simba"
 header-img: "img/post-bg-miui6.jpg"
@@ -57,4 +57,12 @@ EventLoopGroup bossGroup = new NioEventLoopGroup();
 EventLoopGroup workerGroup = new NioEventLoopGroup();
 ```
 
-第一个被称为boss线程组,用于接收连接请求;第二个称为worker线程组,用来处理已连入的连接在其生命周期内所发生的事件(I/O读写操作等).
+第一个被称为boss线程组,用于接收连接请求;第二个称为worker线程组,用来处理已连入的连接在其生命周期内所发生的事件(I/O读写操作等).<br>
+
+
+##	netty最佳实践
+1.创建两个NioEventLoopGroup,用于逻辑隔离NIO Acceptor和NIO I/O线程.<br>
+2.尽量不要在ChannelHandler中启动用户线程(解码后用于将POJO消息派发到后端业务线程的除外).<br>
+3.解码要放在NIO线程调用的解码Handler中进行,不要切换到用户线程中完成消息的解码.<br>
+4.如果业务逻辑操作非常简单,没有复杂的业务逻辑计算,没有可能会导致线程被阻塞的磁盘操作,数据库操作,网络操作等,可以直接在NIO线程上完成业务逻辑编排,不需要切换到用户线程.<br>
+5.如果业务逻辑处理复杂,不要在NIO线程上完成,建议将解码后的POJO消息封装成Task,派发到业务线程池中由业务线程执行,以保证NIO线程尽快被释放,处理其他的I/O操作.<br>
