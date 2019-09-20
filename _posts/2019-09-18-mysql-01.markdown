@@ -1,6 +1,6 @@
 ---
 layout:     post
-title:      "mysql-01"
+title:      "mysql基础"
 date:       2019-06-17 13:30:00 +0800
 author:     "simba"
 header-img: "img/post-bg-miui6.jpg"
@@ -79,3 +79,4 @@ update T set c=c+1 where ID=2;
 当需要恢复到指定的某一秒时,比如某天下午两点发现中午十二点有一次误删表,需要找回数据,那么可以这么做:
 *	首先找到最近的一次全量备份,从这个备份恢复到临时库
 *	然后,从备份的时间点开始,将备份的binlog依次取出来,重放到中午误删表之前的那个时刻.
+
