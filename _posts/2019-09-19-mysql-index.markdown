@@ -166,3 +166,16 @@ mysql> select * from tuser where name like '张 %' and age=10 and ismale=1;
 ![uimNzF.jpg](https://s2.ax1x.com/2019/09/23/uimNzF.jpg)
 
 InnoDB在(name,age)索引内部就判断了age是否等于10,对于不等于10的记录,直接判断并跳过.在这个例子中,只需要对ID4,ID5这两条记录回表取数据判断,就只需要回表2次.图中每一个虚线箭头表示回表一次.
+
+
+
+
+
+####	change buffer
+当需要更新一个数据页时,如果数据页在内存中就直接更新,而如果这个数据页还没有在内存中的话,在不影响数据一致性的前提下,InnoDB会将这些更新操作缓存在change buffer中,这样就不需要从磁盘中读入这个数据页了.在下次查询需要访问这个数据页的时候,将数据页读入内存,然后执行change buffer中与这个页有关的操作.通过这种方式就能保证这个数据逻辑的正确性.
+
+change buffer实际上是可以持久化的数据.也就是说,change buffer在内存中有拷贝,也会被写入到磁盘上.
+
+将change buffer中的操作应用到元数据页,得到最新结果的过程称为merge.除了访问这个数据页会触发merge外,系统有后台线程会定期merge.在数据库正常关闭(shutdown)的过程中也会执行merge操作.
+
+显然,如果能够将更新操作先记录在change buffer,减少读磁盘,语句的执行速度会得到明显的提升.而且数据读入内存是需要占用buffer pool的,所以这种方式还能够避免占用内存,提高内存利用率.
