@@ -1,6 +1,6 @@
 ---
 layout:     post
-title:      "mysql基础"
+title:      "mysql基础架构和日志"
 date:       2019-09-17 13:30:00 +0800
 author:     "simba"
 header-img: "img/post-bg-miui6.jpg"
