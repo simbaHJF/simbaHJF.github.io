@@ -72,3 +72,28 @@ write和fsync的时机,是由参数sync_binlog控制的:
 
 
 ##	redo log的写入机制
+事务在执行过程中,生成的redo log是要先写道redo log buffer的.事务还没提交的时候,redo log buffer中的部分日志有没有可能被持久化到磁盘呢?  答案是,确实会有.
+
+这个问题,要从redo log可能存在的三种状态说起.这三种状态,对应的就是下图三个色块.
+![uLcgkq.png](https://s2.ax1x.com/2019/10/12/uLcgkq.png)
+这三种状态分别是:
+*	存在redo log buffer中,物理上是MySQL进程内存中,就是图中的红色部分;
+*	写到磁盘(write),但是没有持久化(fsync),物理上是在文件系统的page cache里面,也就是图中的黄色部分;
+*	持久化到磁盘,对应的是hard disk,也就是图中的绿色部分.
+
+日志写道redo log buffer是很快的,write到page cache也差不多,但是持久化到磁盘的速度就慢多了.
+
+为了控制redo log buffer的写入策略,InnoDB提供了innodb_flush_log_at_trx_commit参数,它有三种可能取值:
+*	设置为0的时候,表示每次事务提交时都只是把redo log留在redo log buffer中;
+*	设置为1的时候,表示每次事务提交时都将redo log直接持久化到磁盘;
+*	设置为2的时候,表示每次事务提交时都只是把redo log写道page cache.
+
+InnoDB有一个后台线程,每隔1秒,就会把redo log buffer中的日志,调用write写到文件系统的page cache,然后调用fsync持久化到磁盘.
+
+事务执行中间过程的redo log也是直接卸载redo log buffer中的,这些redo log也会被后台线程一起持久化到磁盘.也就是说,一个没有提交的事务的redo log,也是可能已经持久化到磁盘的.
+
+前面介绍两阶段提交的时候说过,时序上redo log先prepare,再写binlog,最后再把redo log commit.如果把innodb_flush_log_at_trx_commit设置成1,那么redo log在prepare阶段就要持久化一次,因为有一个崩溃回复逻辑是要依赖于prepare的redo log,再加上binlog来恢复的.
+
+每秒一次后台轮询刷盘,再加上崩溃恢复这个逻辑,InnoDB就认为redo log在commit的时候就不需要fsync了,只会write到文件系统的page cache中就够了.
+
+通常我们说MySQL的"双1"配置,指的就是sync_binlog和innodb_flush_log_at_trx_commit都设置成1.也就是说,一个事务完整提交前,需要等待两次刷盘,一次是redo log(prepare阶段),一次是binlog.
