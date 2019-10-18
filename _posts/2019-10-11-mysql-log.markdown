@@ -54,7 +54,7 @@ update T set c=c+1 where ID=2;
 
 
 ##	binlog的写入机制
-事务执行过程中,先把日志铣刀binlog cache,事务提交的时候,再把binlog cache写到binlog文件中.一个事务的binlog是不能被拆开的,因此不论这个事务多大,也要确保一次性写入.这就涉及到了binlog cache的保存问题.系统给binlog cache分配了一片内存,每个线程一个,参数binlog_cache_size用于控制单个县城内binlog cache所占内存的大小.如果超过了这个参数规定的大小,就要暂存到磁盘.
+事务执行过程中,先把日写到binlog cache,事务提交的时候,再把binlog cache写到binlog文件中.一个事务的binlog是不能被拆开的,因此不论这个事务多大,也要确保一次性写入.这就涉及到了binlog cache的保存问题.系统给binlog cache分配了一片内存,每个线程一个,参数binlog_cache_size用于控制单个线程内binlog cache所占内存的大小.如果超过了这个参数规定的大小,就要暂存到磁盘.
 
 事务提交的时候,执行器把binlog cache里的完整事务写到binlog中,并清空binlog cache.状态如图1所示:
 ![uL9HgK.png](https://s2.ax1x.com/2019/10/11/uL9HgK.png)
@@ -81,7 +81,7 @@ write和fsync的时机,是由参数sync_binlog控制的:
 *	写到磁盘(write),但是没有持久化(fsync),物理上是在文件系统的page cache里面,也就是图中的黄色部分;
 *	持久化到磁盘,对应的是hard disk,也就是图中的绿色部分.
 
-日志写道redo log buffer是很快的,write到page cache也差不多,但是持久化到磁盘的速度就慢多了.
+日志写到redo log buffer是很快的,write到page cache也差不多,但是持久化到磁盘的速度就慢多了.
 
 为了控制redo log buffer的写入策略,InnoDB提供了innodb_flush_log_at_trx_commit参数,它有三种可能取值:
 *	设置为0的时候,表示每次事务提交时都只是把redo log留在redo log buffer中;
