@@ -1,6 +1,6 @@
 ---
 layout:     post
-title:      "mysql -- 主备一致"
+title:      "mysql -- 主备"
 date:       2019-10-18 11:20:00 +0800
 author:     "simba"
 header-img: "img/post-bg-miui6.jpg"
@@ -51,6 +51,3 @@ tags:
 2.	传到节点B执行一次后,节点B生成的binlog的server id也是A的server id;
 3.	在传回给节点A,A判断到这个server id与自己的相同,就不会再处理这个日志.所以死循环就在这里断掉了.
 
-
-
-##	高可用
