@@ -30,6 +30,8 @@ tags:
 5.	sql_thread读取中转日志,解析出日志里的命令,并执行.
 
 
+## 循环复制问题
+
 实际生产上使用比较多的是双M结构,也就是下图所示结构:
 ![KZUGqI.png](https://s2.ax1x.com/2019/10/18/KZUGqI.png)
 
