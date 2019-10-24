@@ -272,7 +272,7 @@ Linux 2.4版本的内核对Sendfile系统调用进行修改,为DMA拷贝引入�
 用户程序读写数据的流程如下:
 *	用户进程通过sendfile()函数向内核发起系统调用,上下文从用户态切换为内核态.
 *	CPU利用DMA控制器将数据从磁盘拷贝到内核空间的缓冲区
-*	CPU把读缓冲区的文件描述符和数据长度拷贝到网络缓冲区
+*	CPU把内核缓冲区的文件描述符和数据长度拷贝到网络缓冲区
 *	基于已拷贝的文件描述符和数据长度,CPU利用DMA控制器的gather/scatter操作直接批量地将数据从内核的缓冲区拷贝到网卡进行数据传输.
 *	上下文从内核态切换回用户态,Sendffile系统调用执行返回.
 
@@ -325,6 +325,12 @@ fbuf的思想是每个进程都维护着一个缓冲区池,这个缓冲区池能
 下面从CPU拷贝次数,DMA拷贝次数以及系统调用几个方面总结一下上述几种I/O拷贝方式的差别:
 ![KiQMfU.png](https://s2.ax1x.com/2019/10/16/KiQMfU.png)
 
+
+##	Kafka中的零拷贝
+
+Kafka两个重要过程都使用了零拷贝技术,且都是操作系统层面的狭义零拷贝,一是Producer生产的数据存到broker,二是Consumer从broker读取数据.
+*	Producer生产的数据持久化到broker,采用mmap文件映射,实现顺序的快速写入
+*	Customer从broker读取数据,采用sendfile,将磁盘文件读到OS内核缓冲区后,直接转到socket buffer进行网络发送.(sendfile)
 
 
 ##	RocketMQ和Kafka对比
