@@ -1,7 +1,7 @@
 ---
 layout:     post
-title:      "消息队列--设计模型"
-date:       2019-10-12 14:30:00 +0800
+title:      "消息队列--消息模型"
+date:       2019-10-25 14:30:00 +0800
 author:     "simba"
 header-img: "img/post-bg-miui6.jpg"
 tags:
