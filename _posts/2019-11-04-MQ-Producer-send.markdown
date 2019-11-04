@@ -313,3 +313,4 @@ topic检查的整体流程如下:
 [![Kzdmq0.md.png](https://s2.ax1x.com/2019/11/04/Kzdmq0.md.png)](https://imgchr.com/i/Kzdmq0)
 
 ##	发消息的整体流程
+[![KzyqgS.md.png](https://s2.ax1x.com/2019/11/04/KzyqgS.md.png)](https://imgchr.com/i/KzyqgS)
