@@ -597,7 +597,7 @@ protected void doRegister() throws Exception {
 }
 ```
 
-这里selectionKey = javaChannel().register(eventLoop().unwrappedSelector(), 0, this)这行来将channel注册到selector上.注意:这时候传递的ops参数是0,还并不是OP_ACCEPT,因为这时候还未进行bind.
+这里selectionKey = javaChannel().register(eventLoop().unwrappedSelector(), 0, this)这行来将channel注册到selector上,底层是对java中selector#register的调用.注意:这时候传递的ops参数是0,还并不是OP_ACCEPT,因为这时候还未进行bind.
 
 在来看下doRegister()方法完成后的逻辑,会调用safeSetSuccess(promise)方法,来设置成功状态.
 
@@ -624,3 +624,157 @@ private boolean setValue0(Object objResult) {
 ```
 
 这里以一个原子类AtomicReferenceFieldUpdater<DefaultPromise, Object>来更新状态,然后执行notifyListeners()方法,通知完成,唤起各监听器,执行相应处理逻辑.
+
+至此,initAndRegister方法完成,也即NioServerSocketChannel的创建和出事话完成了,至于注册任务,已经被丢到EventLoop中去异步执行了,这时候是否完成了register,并不一定.
+
+返回doBind方法源码,继续看下面的逻辑,根据regFuture.isDone()的结果来判断之前的register是否完成(前面说了,这个注册工作被丢到EventLoop中执行了).如果已经完成,那么直接调用doBind0(regFuture, channel, localAddress, promise)方法,执行绑定,也就是源码中的if分支流程;否则,还未register完成,那么对regFuture注册一个监听器,这个监听器的工作是,待regFuture完成后,如果成功,那么调用bind0方法进行绑定,如果失败,那么设置失败状态.
+
+bind0方法,就是完成端口绑定的方法,来看下内部实现:
+
+```
+private static void doBind0(
+        final ChannelFuture regFuture, final Channel channel,
+        final SocketAddress localAddress, final ChannelPromise promise) {
+    // This method is invoked before channelRegistered() is triggered.  Give user handlers a chance to set up
+    // the pipeline in its channelRegistered() implementation.
+    channel.eventLoop().execute(new Runnable() {
+        @Override
+        public void run() {
+            if (regFuture.isSuccess()) {
+                channel.bind(localAddress, promise).addListener(ChannelFutureListener.CLOSE_ON_FAILURE);
+            } else {
+                promise.setFailure(regFuture.cause());
+            }
+        }
+    });
+}
+```
+
+跟进channel.bind这行,最终会进入到HeadContext#bind方法的调用中(HeadContext,是pipeline中的头,前面说过,pipeline中,head,tail和其他各handler形成一个双向链表)
+
+```
+@Override
+public void bind(
+        ChannelHandlerContext ctx, SocketAddress localAddress, ChannelPromise promise) {
+    unsafe.bind(localAddress, promise);
+}
+```
+
+继续跟进:
+
+```
+@Override
+public final void bind(final SocketAddress localAddress, final ChannelPromise promise) {
+    assertEventLoop();
+    if (!promise.setUncancellable() || !ensureOpen(promise)) {
+        return;
+    }
+    // See: https://github.com/netty/netty/issues/576
+    if (Boolean.TRUE.equals(config().getOption(ChannelOption.SO_BROADCAST)) &&
+        localAddress instanceof InetSocketAddress &&
+        !((InetSocketAddress) localAddress).getAddress().isAnyLocalAddress() &&
+        !PlatformDependent.isWindows() && !PlatformDependent.maybeSuperUser()) {
+        // Warn a user about the fact that a non-root user can't receive a
+        // broadcast packet on *nix if the socket is bound on non-wildcard address.
+        logger.warn(
+                "A non-root user can't receive a broadcast packet if the socket " +
+                "is not bound to a wildcard address; binding to a non-wildcard " +
+                "address (" + localAddress + ") anyway as requested.");
+    }
+    boolean wasActive = isActive();
+    try {
+        doBind(localAddress);
+    } catch (Throwable t) {
+        safeSetFailure(promise, t);
+        closeIfClosed();
+        return;
+    }
+    if (!wasActive && isActive()) {
+        invokeLater(new Runnable() {
+            @Override
+            public void run() {
+                pipeline.fireChannelActive();
+            }
+        });
+    }
+    safeSetSuccess(promise);
+}
+```
+
+其关键点流程如下:
+*   boolean wasActive = isActive()方法获取channel是否活跃,当前并未激活,因此wasActive为false
+*   调用doBind,真正进行绑定(底层java实现)
+*   channel以激活,走到if (!wasActive && isActive())分支判断,进入分支流程.invokeLater方法向EventLoop提交了一个任务,也就是pipeline.fireChannelActive()方法,下面来看下这个任务要做的事情是什么:
+
+```
+public final ChannelPipeline fireChannelActive() {
+    AbstractChannelHandlerContext.invokeChannelActive(head);
+    return this;
+}
+```
+
+跟进底层,会调用到HeadContext#channelActive(ChannelHandlerContext ctx)方法:
+
+```
+public void channelActive(ChannelHandlerContext ctx) {
+    ctx.fireChannelActive();
+    readIfIsAutoRead();
+}
+```
+
+这里readIfIsAutoRead是一个关键点,向下一直跟进,最终会调用到会调用到HeadContext#read(ChannelHandlerContext ctx)方法:
+
+```
+public void read(ChannelHandlerContext ctx) {
+    unsafe.beginRead();
+}
+```
+
+继续跟进下去:
+
+```
+public final void beginRead() {
+    assertEventLoop();
+    if (!isActive()) {
+        return;
+    }
+    try {
+        doBeginRead();
+    } catch (final Exception e) {
+        invokeLater(new Runnable() {
+            @Override
+            public void run() {
+                pipeline.fireExceptionCaught(e);
+            }
+        });
+        close(voidPromise());
+    }
+}
+```
+
+这里的关键逻辑就是doBeginRead()方法.
+
+```
+protected void doBeginRead() throws Exception {
+    // Channel.read() or ChannelHandlerContext.read() was called
+    final SelectionKey selectionKey = this.selectionKey;
+    if (!selectionKey.isValid()) {
+        return;
+    }
+    readPending = true;
+    final int interestOps = selectionKey.interestOps();
+    if ((interestOps & readInterestOp) == 0) {
+        selectionKey.interestOps(interestOps | readInterestOp);
+    }
+}
+```
+
+到这里可以看到,interestOps是我们前面所讲的selector刚创建时注册的key,是0,并不是OP_ACCEPT;而readInterestOp是我们NioServerSocketChannel创建时候设置的key,是16,也就是OP_ACCEPT.
+
+这两个值做位与计算,结果为0,因此会进入到if分支流程中.在分支流程中,对interestOps和readInterestOp做位或运算,得到值16,也就是OP_ACCEPT.
+
+通过selectionKey.interestOps(interestOps | readInterestOp)这一行的执行,就已经将selector的监听事件OP_ACCEPT注册好了.
+
+
+
+至此,Nett启动完成.另外这里再多补充一句,通过ChannelInitializer来向pipeline中添加handler时,ChannelInitializer中的initChannel方法执行完后,ChannelInitializer就会被移除了,因此ChannelInitializer是一次性的(<font color="red">注意,这里指的是ChannelInitializer是一次性的,用完移除,而并不是指通过ChannelInitializer添加来的handler,这些handler是会一直存在的</font>)
