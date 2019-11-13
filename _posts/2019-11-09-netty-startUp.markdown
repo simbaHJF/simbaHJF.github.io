@@ -625,7 +625,7 @@ private boolean setValue0(Object objResult) {
 
 这里以一个原子类AtomicReferenceFieldUpdater<DefaultPromise, Object>来更新状态,然后执行notifyListeners()方法,通知完成,唤起各监听器,执行相应处理逻辑.
 
-至此,initAndRegister方法完成,也即NioServerSocketChannel的创建和出事话完成了,至于注册任务,已经被丢到EventLoop中去异步执行了,这时候是否完成了register,并不一定.
+至此,initAndRegister方法完成,也即NioServerSocketChannel的创建和初始化完成了,至于注册任务,已经被丢到EventLoop中去异步执行了,这时候是否完成了register,并不一定.
 
 返回doBind方法源码,继续看下面的逻辑,根据regFuture.isDone()的结果来判断之前的register是否完成(前面说了,这个注册工作被丢到EventLoop中执行了).如果已经完成,那么直接调用doBind0(regFuture, channel, localAddress, promise)方法,执行绑定,也就是源码中的if分支流程;否则,还未register完成,那么对regFuture注册一个监听器,这个监听器的工作是,待regFuture完成后,如果成功,那么调用bind0方法进行绑定,如果失败,那么设置失败状态.
 
@@ -650,7 +650,23 @@ private static void doBind0(
 }
 ```
 
-跟进channel.bind这行,最终会进入到HeadContext#bind方法的调用中(HeadContext,是pipeline中的头,前面说过,pipeline中,head,tail和其他各handler形成一个双向链表)
+跟进channel.bind这行,调用pipeline.bind(localAddress, promise)方法.
+
+```
+public ChannelFuture bind(SocketAddress localAddress, ChannelPromise promise) {
+    return pipeline.bind(localAddress, promise);
+}
+```
+
+再进入内部,会调用tail.bind(localAddress, promise)方法:
+
+```
+public final ChannelFuture bind(SocketAddress localAddress, ChannelPromise promise) {
+    return tail.bind(localAddress, promise);
+}
+```
+
+最终会进入到HeadContext#bind方法的调用中(HeadContext,是pipeline中的头,前面说过,pipeline中,head,tail和其他各handler形成一个双向链表),因此,bind是从tail开始,沿着pipeline向head传播的.
 
 ```
 @Override
@@ -721,8 +737,9 @@ public void channelActive(ChannelHandlerContext ctx) {
     readIfIsAutoRead();
 }
 ```
+这个方法会从head开始沿着pipeline传播,对pipeline中每个handler都调用下ctx.fireChannelActive()方法.可以理解为一种责任链模式的唤醒.
 
-这里readIfIsAutoRead是一个关键点,向下一直跟进,最终会调用到会调用到HeadContext#read(ChannelHandlerContext ctx)方法:
+然后便是在pipeline中传播完成后,回到head中,调用readIfIsAutoRead,这里readIfIsAutoRead是一个关键点,向下一直跟进,最终会调用到会调用到HeadContext#read(ChannelHandlerContext ctx)方法:
 
 ```
 public void read(ChannelHandlerContext ctx) {
