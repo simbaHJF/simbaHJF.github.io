@@ -790,7 +790,7 @@ protected void doBeginRead() throws Exception {
 
 这两个值做位与计算,结果为0,因此会进入到if分支流程中.在分支流程中,对interestOps和readInterestOp做位或运算,得到值16,也就是OP_ACCEPT.
 
-通过selectionKey.interestOps(interestOps | readInterestOp)这一行的执行,就已经将selector的监听事件OP_ACCEPT注册好了.
+通过selectionKey.interestOps(interestOps \| readInterestOp)这一行的执行,就已经将selector的监听事件OP_ACCEPT注册好了.
 
 
 

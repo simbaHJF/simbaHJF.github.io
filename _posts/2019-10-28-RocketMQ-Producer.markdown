@@ -168,7 +168,7 @@ public void start() throws MQClientException {
 
 在上述2中启动的定时任务主要有:从NameServer获取topic路由信息,清除下线Broker信息,向Broker发送心跳.
 
-其中,从NameServer获取topic路由信息任务,只与某一个nameserver进行通信(如果这个链接正常的话,否则会销毁channel,换另一个nameserver建立连接).当然,Producer刚刚初始化的时候,这时还没有topic,只有一个
+其中,从NameServer获取topic路由信息任务,只与某一个nameserver进行通信(如果这个链接正常的话,否则会销毁channel,换另一个nameserver建立连接).
 
 向Broker发送心跳的任务是给每个Broker都发送.
 
