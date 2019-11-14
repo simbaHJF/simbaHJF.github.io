@@ -39,7 +39,7 @@ public class ConsumerOffsetManager extends ConfigManager {
 
 这个方法是加载订阅组信息文件.这个文件是brokerRootDir/config/subscriptionGroup.json
 
-同样,首先读入文件,然后decode,然后反序列化.反序列化成的对象为SubscriptionGroupManager.其内部通过map存储信息,其中key为groupName,
+同样,首先读入文件,然后decode,然后反序列化.反序列化成的对象为SubscriptionGroupManager.其内部通过map存储信息,其中key为groupName.
 
 ```
 private final ConcurrentMap<String, SubscriptionGroupConfig> subscriptionGroupTable =
