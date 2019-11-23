@@ -125,7 +125,8 @@ public final void read() {
 *   增加读取数据次数计数
 *   发布channelRead事件
 *   循环判断,是否进行下一次读取
-*   跳出循环后,发布ChannelReadComplete事件
+*   跳出循环后,执行allocHandle的readComplete方法(记录这次读时间总共读了多少数据,计算下次分配大小)
+*   发布ChannelReadComplete事件,相当于完成本次读时间的处理.**另外重要的一点:这里会再次设置号SelectionKey的OP_READ事件,以做好下次读的准备**
 
 
 这里深入看一下读数据的具体实现,也就是doReadBytes(byteBuf)的逻辑:
@@ -166,7 +167,7 @@ public int setBytes(int index, ScatteringByteChannel in, int length) throws IOEx
 }
 ```
 
-这里就和原生java的ByteBuffer联系起来了,这里获取的是DirectByteBuffer,堆外内存.
+这里就和原生java的ByteBuffer联系起来了,这里获取的tmpBuf是DirectByteBuffer,堆外内存.
 
 使用对外内存的原因通常如下:
 *   在进程间可以共享,减少虚拟机间的复制
@@ -174,6 +175,9 @@ public int setBytes(int index, ScatteringByteChannel in, int length) throws IOEx
 *   在某些场景下可以提升程序I/O操纵的性能.少去了将数据从堆内内存拷贝到堆外内存的步骤(用户态到内核态的数据拷贝).
 
 
-关于关于netty的ByteBuf,这里在聊几句:<br>
+关于netty的ByteBuf,这里在聊几句:<br>
 netty使用的自身的ByteBuf对象,其本质上是使用了外观模式对JDK的ByteBuffer进行的封装(其实netty的NioSocketChannel也是对原生java的SelectableChannel的封装,SelectableChannel是原生java NIO中Channel接口的抽象实现类)<br>
 相较于原生的ByteBuffer,Netty的ByteBuf做了很多优化.
+
+
+回到上面源码中第6行,就是把SocketChannel中的数据读到ByteBuffer中.
