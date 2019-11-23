@@ -172,3 +172,8 @@ public int setBytes(int index, ScatteringByteChannel in, int length) throws IOEx
 *   在进程间可以共享,减少虚拟机间的复制
 *   对垃圾回收停顿的改善: 如果应用某些长期存活并大量存在的对象,经常会触发YGC或者FullGC,可以考虑报这些对象放到堆外.过大的堆会影响Java应用的性能.如果使用堆外内存的话,堆外内存是直接受操作系统管理( 而不是虚拟机).这样做的结果就是能保持一个较小的堆内内存,以减少垃圾收集对应用的影响.
 *   在某些场景下可以提升程序I/O操纵的性能.少去了将数据从堆内内存拷贝到堆外内存的步骤(用户态到内核态的数据拷贝).
+
+
+关于关于netty的ByteBuf,这里在聊几句:<br>
+netty使用的自身的ByteBuf对象,其本质上是使用了外观模式对JDK的ByteBuffer进行的封装(其实netty的NioSocketChannel也是对原生java的SelectableChannel的封装,SelectableChannel是原生java NIO中Channel接口的抽象实现类)<br>
+相较于原生的ByteBuffer,Netty的ByteBuf做了很多优化.
