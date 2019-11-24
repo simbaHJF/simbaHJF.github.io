@@ -17,7 +17,7 @@ tags:
 
 change buffer实际上是可以持久化的数据.也就是说,change buffer在内存中有拷贝,也会被写入到磁盘上.
 
-将change buffer中的操作应用到元数据页,得到最新结果的过程称为merge.除了访问这个数据页会触发merge外,系统有后台线程会定期merge.在数据库正常关闭(shutdown)的过程中也会执行merge操作.
+将change buffer中的操作应用到原数据页,得到最新结果的过程称为merge.除了访问这个数据页会触发merge外,系统有后台线程会定期merge.在数据库正常关闭(shutdown)的过程中也会执行merge操作.
 
 显然,如果能够将更新操作先记录在change buffer,减少读磁盘,语句的执行速度会得到明显的提升.而且数据读入内存是需要占用buffer pool的,所以这种方式还能够避免占用内存,提高内存利用率.
 

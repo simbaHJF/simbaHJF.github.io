@@ -90,7 +90,7 @@ write和fsync的时机,是由参数sync_binlog控制的:
 
 InnoDB有一个后台线程,每隔1秒,就会把redo log buffer中的日志,调用write写到文件系统的page cache,然后调用fsync持久化到磁盘.
 
-事务执行中间过程的redo log也是直接卸载redo log buffer中的,这些redo log也会被后台线程一起持久化到磁盘.也就是说,一个没有提交的事务的redo log,也是可能已经持久化到磁盘的.
+事务执行中间过程的redo log也是直接写在redo log buffer中的,这些redo log也会被后台线程一起持久化到磁盘.也就是说,一个没有提交的事务的redo log,也是可能已经持久化到磁盘的.
 
 前面介绍两阶段提交的时候说过,时序上redo log先prepare,再写binlog,最后再把redo log commit.如果把innodb_flush_log_at_trx_commit设置成1,那么redo log在prepare阶段就要持久化一次,因为有一个崩溃回复逻辑是要依赖于prepare的redo log,再加上binlog来恢复的.
 
