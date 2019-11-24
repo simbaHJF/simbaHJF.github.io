@@ -125,7 +125,7 @@ public final void read() {
 *   增加读取数据次数计数
 *   发布channelRead事件
 *   循环判断,是否进行下一次读取
-*   跳出循环后,执行allocHandle的readComplete方法(记录这次读时间总共读了多少数据,计算下次分配大小)
+*   跳出循环后,执行allocHandle的readComplete方法(记录这次读时间总共读了多少数据,统计计算下次分配大小)
 *   发布ChannelReadComplete事件,相当于完成本次读时间的处理.**另外重要的一点:这里会再次设置号SelectionKey的OP_READ事件,以做好下次读的准备**
 
 
