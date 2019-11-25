@@ -82,7 +82,7 @@ int maxfdp:是一个整数值,是指集合中所有希望监视的文件描述�
 
 （1）对于fd_set set;执行FD_ZERO(&set);则set用位表示是0000,0000.(这里假定左边为低位即fd0,右边为高位,对应前面的fd_set图)
 
-（2）若fd＝5,执行FD_SET(fd,&set);后set变为0000,0100(index 5位置置为1)
+（2）若fd＝5,执行FD_SET(fd,&set)后set变为0000,0100(index 5位置置为1)
 
 （3）若再加入fd＝2,fd=1,则set变为0110,0100
 
@@ -96,7 +96,7 @@ int maxfdp:是一个整数值,是指集合中所有希望监视的文件描述�
 <br>
 基于上面的讨论，可以轻松得出select模型的特点：
 
-（1)可监控的文件描述符个数取决与sizeof(fd_set)的值,也就是说select能监控的fd个数是有限的.据说可调,另有说虽然可调,但调整上限受于编译内核时的变量值.
+（1)可监控的文件描述符个数取决与sizeof(fd_set)的值,也就是说select能监控的fd个数是有限的.据说可调,另有说虽然可调,但调整上限受限于编译内核时的变量值.
 
 （2）将fd加入select监控集的同时,还要再使用一个数据结构array保存放到select监控集中的fd,一是用于在select返回后,array作为源数据和fd_set进行FD_ISSET判断.二是select返回后会把以前加入的但并无事件发生的fd清空,则每次开始 select前都要重新从array取得fd逐一加入(FD_ZERO最先),扫描array的同时取得fd最大值maxfd,用于select的第一个参数.
 
