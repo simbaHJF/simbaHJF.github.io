@@ -133,3 +133,14 @@ private void close(final ChannelPromise promise, final Throwable cause,
 ```
 
 *	this.outboundBuffer = null;	(禁止添加任何消息并刷新到outboundBuffer)
+*	Executor closeExecutor = prepareToClose();一些关闭前的准备工作.
+*	doClose0(promise);执行真正关闭,内部逻辑底层会最终执行jdk的channel的关闭逻辑.
+*	调用fireChannelInactiveAndDeregister(wasActive);方法,其内部会沿着pipeline发布fireChannelUnregistered事件.
+
+
+#	知识点
+*	关闭连接的本质:jdk中nio包下channel的关闭和SelectionKey的关闭
+*	要点:
+	*	关闭连接,会触发OP_READ方法.读取字节数是-1代表关闭.
+	*	数据读取进行时,强行关闭,触发IO Exception,进而执行关闭.
+	*	Channel的关闭包含了SelectionKey的cancel.
