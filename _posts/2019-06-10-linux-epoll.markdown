@@ -64,7 +64,7 @@ c.  int epoll_wait(int epfd, struct epoll_event * events, int maxevents, int tim
 
 
 ####  LT和ET
-LT(level triggered)是epoll缺省的工作方式,并且同时支持block和no-block socket.在这种做法中,内核告诉你一个文件描述符是否就绪了,然后你可以对这个就绪的fd进行IO操作.如果你不作任何操作,内核还是会继续通知你 的,所以,这种模式编程出错误可能性要小一点.传统的select/poll都是这种模型的代表．
+LT(level triggered)是epoll缺省的工作方式,并且同时支持block和no-block socket.在这种做法中,内核告诉你一个文件描述符是否就绪了,然后你可以对这个就绪的fd进行IO操作.如果你不作任何操作,内核还是会继续通知你的,所以,这种模式编程出错误可能性要小一点.传统的select/poll都是这种模型的代表．
 ET (edge-triggered)是高速工作方式,只支持no-block socket,它效率要比LT更高.ET与LT的区别在于,当一个新的事件到来时,ET模式下当然可以从epoll_wait调用中获取到这个事件,可是如果这次没有把这个事件对应的套接字缓冲区处理完,在这个套接字中没有新的事件再次到来时,在ET模式下是无法再次从epoll_wait调用中获取这个事件的.而LT模式正好相反,只要一个事件对应的套接字缓冲区还有数据,就总能从epoll_wait中获取这个事件.
 因此,LT模式下开发基于epoll的应用要简单些,不太容易出错.而在ET模式下事件发生时,如果没有彻底地将缓冲区数据处理完,则会导致缓冲区中的用户请求得不到响应.
 Nginx默认采用ET模式来使用epoll.

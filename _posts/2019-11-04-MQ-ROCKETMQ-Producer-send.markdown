@@ -224,7 +224,7 @@ public class QueueData implements Comparable<QueueData> {
 ```
 [![KzQFC6.md.png](https://s2.ax1x.com/2019/11/04/KzQFC6.md.png)](https://imgchr.com/i/KzQFC6)
 
-"broker-1","broker-2"分别为两个Broker服务器的名称,相同名称下可以有主从Broker,因此每个Broker又都有brokerId.
+"broker-1","broker-2"分别为两个Broker服务器的名称,相同名称下可以有主从Broker,因此每个Broker又都有brokerId.默认情况下,BrokerId如果为MixAll.MASTER_ID(值为0)的话,那么认为这个Broker为MASTER主机,其余的位于相同名称下的Broker为这台MASTER主机的SLAVE主机.
 
 ####	选取MessageQueue
 
