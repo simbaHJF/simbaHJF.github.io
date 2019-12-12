@@ -9,8 +9,13 @@ tags:
 
 ---
 
+> 参考:	
+> 开放源代码的全文检索引擎Lucene
+> https://blog.csdn.net/njpjsoftdev/article/details/54015485  
+> https://blog.csdn.net/yunqiinsight/article/details/80008394  
 
-##	一.总论
+
+#	总论
 
 根据[http://lucene.apache.org/core/index.html](http://lucene.apache.org/core/index.html)的定义:Lucene是一个搞笑的,基于Java的全文检索库.所以在了解Lucene之前先来了解一下什么是全文检索.<br>
 
@@ -41,22 +46,15 @@ tags:
 *	搜索索引:	就是得到用户的查询请求,搜索创建的索引,然后返回结果的过程.
 <br>
 
-于是全文检索就存在三个重要问题:
-*	索引里面存什么数据?(Index)
-*	如何创建索引?(Indexing)
-*	如何对索引进行搜索?(Search)
-<br>
-
-下面将对这三个问题进行进一步研究.<br>
 
 
-##	二,索引里面存什么数据
+#	索引原理
 
 顺序扫描速度慢的原因是:我们想要搜索的信息和非结构化数据中存储的信息不一致.非结构化数据中所存储的信息是每个文件包含那些字符串,即已知文件,欲求字符串相对容易,是一种从文件到字符串的映射.而我们想要搜索的信息是那些文件包含给定字符串,即已知字符串,欲求文件的过程,是一种从字符串到文件的映射.两者恰恰相反.因此,如果索引总能够保存从字符串到文件的映射,则会大大提高搜索速度.由于从字符串到文件的映射是文件到字符串映射的反向过程,于是保存这种信息的索引称为反向索引(倒排索引).<br>
 
 反向索引所保存的信息一般如下:<br>
 
-假设我的文档集合里面有100篇文档,为了方便表示,我们为文档从1到100进行编号,得到下面的结构:
+假设我的文档集合里面有100篇文档,为了方便表示,我们为文档从1到100进行编号,得到下面的倒排索引结构:
 ![Z3lMrR.png](https://s2.ax1x.com/2019/06/30/Z3lMrR.png)
 
 左边保存的是一系列字符串,称为词典.每个字符串都指向包含此字符串的文档链表,此文档链表称为倒排表.有了倒排索引,便使保存到信息和要搜索的信息一致了,可以大大加快搜索的速度.比如当需要查找既包含字符串"lucene"又包含字符串"solr"的文档,只需要以下几步:
@@ -71,113 +69,127 @@ tags:
 由此可见,全文检索有一个预先建立索引的过程,如果索引的数据量很大,创建索引的过程也会相对较慢,但创建索引的过程只需要一次,以后的查询过程就只需要搜索创建好的索引就可以了.这也是全文检索相对于顺序扫描的又是之一:一次索引,多次使用.<br>
 
 
-##	三.如何创建索引
-全文检索的索引创建过程一般有以下几步:<br>
+在倒排索引中,词典结构尤为重要,有很多种词典结构,各有各的优缺点,最简单如排序数组,通过二分查找来检索数据,更快的有哈希表,磁盘查找有B树和B+树,但一个能支持TB级数据的倒排索引结构需要在时间和空间上有个平衡,下表列出了一些常见词典的优缺点:
 
-第一步:一些要索引的原文档(Document).<br>
-
-为了方便说明索引的创建过程,这里特意用两个文件为例:<br>
-
-文件一:Students should be allowed to go out with their friends, but not allowed to drink beer.<br>
-
-文件二：My friend Jerry went to school to see his students but found them drunk which is not allowed.<br>
-
-第二步:将原文档传给分词组件(Tokenizer)<br>
-
-分词组件(Tokenizer)会做以下几件事情(此过程称为Tokenize):<br>
-
-1.将文档分成一个一个单独的词.<br>
-
-2.去除标点符号<br>
-
-3.去除听此(Stop word).<br>
-
-所谓停词(Stop word)就是一种语言中最普通的一些单词,由于没有特别的意义,因而大多数情况下不能成为搜索的关键词,因而创建索引时,这种词会被去掉而减少索引的大小.英语中停词如:"the","a","this"等.对于每一种语言的分词组件,都有一个停词集合.<br>
-
-经过分词后得到的结果称为词元(Token).在我们的例子中,便得到以下词元(Token):"Students","allowed","go","their","friends","allowed","drink","beer","My","friend","Jerry","went","school","see","his","students","found","them","drunk","allow".<br>
-
-第三步:将得到的词元(Token)传给语言处理组件(Linguistic Processor).<br>
-
-语言处理组件主要是对得到的词元做一些同语言相关的处理.对于英语,语言处理组件一般做以下几点:<br>
-
-*	变为小写
-*	将单词缩减为词根形式,如"cars"到"car"等.这种操作称为:stemming.
-*	将单词转变为词根形式,如"drove"到"drive"等.这种操作称为:lemmatization.
-<br>
-
-语言处理组件的结果称为词(Term).<br>
-
-在我们的例子中,经过语言处理,得到的词(Term)如下:"student","allow","go","their","friend","allow","drink","beer","my","friend","jerry","go","school","see","his","student","find","them","drink","allow".也正是因为有语言处理的步骤,才能使搜索drove,而drive也能被搜索出来.<br>
-
-第四步:将得到的词(Term)传给索引组件(Indexer).<br>
-
-索引组件(Indexer)主要做以下几件事情:<br>
-
-1.利用得到的词(Term)创建一个字典.<br>
-
-在我们的例子中字典如下:
-
-Term | Document ID |
+数据结构 | 优缺点 |
 -|-|
-student | 1 |
-allow | 1 |
-go | 1 |
-their | 1 |
-friend | 1 |
-allow | 1 |
-drink | 1 |
-beer | 1 |
-my | 2 |
-friend | 2 |
-jerry | 2 |
-go | 2 |
-school | 2 |
-see | 2 |
-his | 2 |
-student | 2 |
-find | 2 |
-them | 2 |
-drink | 2 |
-allow | 2 |
+排序列表 | 实现简单;但性能差 |
+哈希表 | 性能高;但内存消耗大,几乎是原始数据的三倍 |
+跳跃表 |	占内存小,且可调;但对模糊查询支持不好 |
+B树 | 磁盘索引,更新方便;但检索速度慢,数据库应用较多 |
+字典树 | 查询效率只跟字符串长度有关;但只适合英文词典 |
+Finite State Transducers(FST) | 共享前缀,内存消耗小;但要求输入有序更新不易 |
 
-<br>
+其中可用的有B+树,跳跃表,FST
 
-2.对字典按字母顺序进行排序.
-Term | Document ID |
--|-|
-allow | 1 |
-allow | 1 |
-allow | 2 |
-beer | 1 |
-drink | 1 |
-drink | 2 |
-find | 2 |
-friend | 1 |
-friend | 2 |
-go | 1 |
-go | 2 |
-his | 2 |
-jerry | 2 |
-my | 2 |
-school | 2 |
-see | 2 |
-student | 1 |
-student | 2 |
-their | 1 |
-them | 2 |
+B+树:
+![Q6s1YQ.png](https://s2.ax1x.com/2019/12/12/Q6s1YQ.png)
 
-<br>
+> 理论基础:	平衡多路查找树  
+> 优点:	外存索引,可更新  
+> 缺点:	空间大,速度不够快  
 
-3.合并相同的词(Term)成为文档倒排(Posting List)链表.
-![ZGZdln.png](https://s2.ax1x.com/2019/07/01/ZGZdln.png)
 
-在此表中,有几个定义:<br>
-*	Document Frequency即文档频次,表示总共有多少文件包含此词(Term)
-*	Frequency即词频率,表示此文件中包含了几个此词(Term)
-<br>
+跳跃表:
+![Q6gBHx.png](https://s2.ax1x.com/2019/12/12/Q6gBHx.png)
 
-所以对词(Term)"allow"来讲,总共有两篇文档包含此词,从而词后面的文档链表总共有两项,第一项表示包含"allow"的第一篇文档,即1号文档,此文档中,"allow"出现了2次,第二项表示包含"allow"的第二个文档,是2号文档,此文档中,"allow"出现了1次.<br>
+> 优点:	结构简单,跳跃间隔,级数等可控,Lucene 3.0之前使用的也是跳跃表结构,后换成了FST,但跳跃表在Lucene其他地方还有应用如倒排表合并和文档号索引.  
+> 缺点:	模糊查询支持不好
 
-到这里,索引已经创建好了,我们可以通过它很快的找到我们想要的文档.而且在此过程中,我们搜索"drive","driving","drove","driven"也能够被搜到.因为在我们的索引中,"driving","drove","driven"都会经过语言处理而变成"drive".<br>
 
-在搜索时,如果输入"driving",输入的查询语句同样经过我们这里的一到三步,从而变为查询"drive",从而可以搜索到想要的文档.
+FST:
+Lucene 4.0后使用的词典索引结构
+![Q62Vq1.png](https://s2.ax1x.com/2019/12/12/Q62Vq1.png)
+
+> 理论基础:	<<Direct construction of minimal acyclic subsequential transducers>>,通过输入有序字符串构建最小有向无环图.  
+> 优点:	内存占用率低,压缩率一般在3倍~20倍之间,查询快,模糊查询支持好.  
+> 缺点:	结构复杂,输入要求有序,更新不易.  
+> 注:	Lucene 4中有开源实现.从对外接口上看,它跟Map结构很相似,有查找,有迭代
+
+
+
+FST 100万数据性能测试:
+
+数据结构 | 构建时间(ms) | 查询所有key(ms) |
+-|-|-|
+HashMap | 185 | 106 |
+TreeMap | 500 | 218 |
+FST | 1512 | 890 |
+
+由此可见,FST性能和HashMap的差距不大,但FST有个不可比拟的优势就是占用内存小,只有HashMap的十分之一左右,这对大数据规模检索是至关重要的,毕竟速度再快放不进内存也是没用的.
+
+因此,一个合格的词典结构有以下要求:
+*	查询速度
+*	内存占用
+*	内存+磁盘结合
+
+
+由词典FST和倒排表SkipList的结合,索引查询的过程可用下图来描述:
+![Q6fgot.png](https://s2.ax1x.com/2019/12/12/Q6fgot.png)
+
+
+在查询时,如果我们有多个条件,比如 name = "Alice" and age = "18"的查询,就会涉及倒排表合并,假如我们有下面三个倒排链需要进行合并.
+![Q6ha0s.png](https://s2.ax1x.com/2019/12/12/Q6ha0s.png)
+
+那么,在Lucene中会采用下列顺序进行合并:
+
+1.	从termA开始遍历,得到第一个元素docId=1;
+2.	set currentDocId=当前元素docId;
+3.	在termB中,search(currentDocId) = 1 (返回大于等于currentDocId的一个doc),
+	*	如果返回元素的docId等于currentDocId,继续
+	*	如果不相等,跳到步骤2,然后继续执行(注意,如果这里跳到步骤2后,那么currentDocId将被设置为当前步骤3中刚刚搜索到的docId,也即大于之前currentDocId的那个)
+4.	到termC判断
+	*	相等则获取该元素结果,设置currentDocId = termC的nextItem,然后循环前面逻辑
+	*	不相等则跳过,循环前面逻辑
+5.	直到某个倒排链表到末尾
+
+
+
+
+
+
+
+#	索引实现
+
+**<font color="red">基于Lucene 4</font>**
+
+Lucene的索引文件结构,基本可以分为三个部分:词典,倒排表,正向文件,列式存储DocValues.如下图:
+![Q6W4bR.png](https://s2.ax1x.com/2019/12/12/Q6W4bR.png)
+
+
+##	索引结构
+
+Lucene现在采用的数据结构为FST,它的特点是:
+*	次查找复杂度为O(log length)
+*	共享前缀,节省空间
+*	内存存放前缀索引,磁盘存放后缀词块
+
+我们往索引库里插入四个单词abd,abe,acf,acg,来看看它的索引文件内容
+![Q6oGUs.png](https://s2.ax1x.com/2019/12/12/Q6oGUs.png)
+
+tip部分,每列一个FST索引,所以会有多个FST,每个FST存放前缀和后缀块指针,这里前缀就为a,ab,ac.<br>
+tim里面存放后缀块和词的其他信息如倒排表指针,TFDF等.<br>
+doc文件里就位每个单词的倒排表.  
+
+所以它的检索过程分为三个步骤:  
+1.	内存加载tip文件,通过FST匹配前缀找到后缀词块位置.
+2.	根据词块位置,读取磁盘中tim文件中后缀块并找到后缀和相应的倒排表位置信息.
+3.	根据倒排表位置去doc文件中加载倒排表.
+
+
+这里有两个问题,第一就是前缀如何计算,第二就是后缀如何写磁盘并通过FST定位,下面将描述Lucene构建FST过程.  
+已知FST要求输入有序,所以Lucene会将解析出来的文档单词预先排序,然后构建FST,我们假设输入abd,abe,acf,acg,那么整个构建过程如下:
+![Q6HiuT.png](https://s2.ax1x.com/2019/12/12/Q6HiuT.png)
+
+> 1.	插入abd时,没有输出.  
+> 2.	插入abe时,计算出前缀ab,但此时不知道后续还不会有其他以ab为前缀的词,所以此时无输出.  
+> 3.	插入acf时,因为是有序的,知道不会再有ab前缀的词了,这时就可以写tip和tim了,tim中写入后缀词块d、e和它们的倒排表位置ip_d,ip_e. tip中写入a,b和以ab为前缀的后缀词块位置(真实情况下会写入更多信息如词频等).  
+> 4.	插入acg时,计算出和acf共享前缀ac,这时输入已经结束,所有数据写入磁盘.tim中写入后缀词块f、g和相对应的倒排表位置,tip中写入c和以ac为前缀的后缀词块位置.  
+
+以上是一个简化过程,Lucene的FST实现的主要优化策略有:
+> 1.	最小后缀数.Lucene对写入tip的前缀有个最小后缀数要求,默认25,这是为了进一步减少内存使用.如果按照25的后缀数,那么就不存在ab、ac前缀,将只有一个跟节点,abd、abe、acf、acg将都作为后缀存在tim文件中.我们的10g的一个索引库,索引内存消耗只占20M左右.  
+> 2.	前缀计算基于byte,而不是char,这样可以减少后缀数,防止后缀数太多,影响性能.如对宇(e9 b8 a2)、守(e9 b8 a3)、安(e9 b8 a4)这三个汉字,FST构建出来,不是只有根节点,三个汉字为后缀,而是从unicode码出发,以e9、b8为前缀，a2、a3、a4为后缀,如下图:  
+
+![Q6qcj0.png](https://s2.ax1x.com/2019/12/12/Q6qcj0.png)  
+
+
