@@ -1,7 +1,7 @@
 ---
 layout:     post
 title:      "Lucene简介"
-date:       2019-12-13 13:30:00 +0800
+date:       2019-12-12 13:30:00 +0800
 author:     "simba"
 header-img: "img/post-bg-miui6.jpg"
 tags:
@@ -17,7 +17,7 @@ tags:
 
 #	总论
 
-根据[http://lucene.apache.org/core/index.html](http://lucene.apache.org/core/index.html)的定义:Lucene是一个搞笑的,基于Java的全文检索库.所以在了解Lucene之前先来了解一下什么是全文检索.<br>
+根据[http://lucene.apache.org/core/index.html](http://lucene.apache.org/core/index.html)的定义:Lucene是一个高效的,基于Java的全文检索库.所以在了解Lucene之前先来了解一下什么是全文检索.<br>
 
 我们常用的数据总体分成两种:结构化数据和非结构化数据.
 *	结构化数据: 指具有固定格式或有限长度的数据,如数据库,元数据等.
