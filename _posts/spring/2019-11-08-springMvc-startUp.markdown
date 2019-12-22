@@ -86,7 +86,8 @@ public WebApplicationContext initWebApplicationContext(ServletContext servletCon
 ```
 
 ###	容器的创建
-首先来看一下spring是如何决定创建的容器类型,其逻辑如下:this.context = createWebApplicationContext(servletContext);
+首先来看一下spring是如何决定创建的容器类型,其逻辑如下:  
+this.context = createWebApplicationContext(servletContext);
 
 跟进方法内部,具体逻辑为:
 ```
@@ -126,7 +127,9 @@ protected Class<?> determineContextClass(ServletContext servletContext) {
 </context-param>
 ```
 
-*	否则执行contextClassName = defaultStrategies.getProperty(WebApplicationContext.class.getName());来获取容器类型.其中defaultStrategies会加载ContextLoader.properties文件中的属性,在该文件中,对容器class类型进行了默认设置.<br>
+*	否则执行  
+contextClassName = defaultStrategies.getProperty(WebApplicationContext.class.getName());  
+来获取容器类型.其中defaultStrategies会加载ContextLoader.properties文件中的属性,在该文件中,对容器class类型进行了默认设置.<br>
 ContextLoader.properties内容如下:
 
 ```
@@ -138,6 +141,9 @@ org.springframework.web.context.WebApplicationContext=org.springframework.web.co
 ```
 
 *	通过反射,创建对应容器class类型的一个实例.
+
+下面来看下XmlWebApplicationContext的类图:
+![Qv3iM6.png](https://s2.ax1x.com/2019/12/21/Qv3iM6.png)
 
 
 ###	容器初始化
@@ -272,14 +278,23 @@ public void refresh() throws BeansException, IllegalStateException {
 其方法内部调用refreshBeanFactory方法,完成两件事:
 1.	创建一个DefaultListableBeanFactory实例,spring容器上下文XmlWebApplicationContext中会通过beanFactory属性来持有这个DefaultListableBeanFactory实例.
 2.	将bean定义解析为BeanDefinition,存储到DefaultListableBeanFactory容器中.方法为loadBeanDefinitions.<br>
-在该方法中,完成对配置文件中bean定义的解析,解析为BeanDefinition(它是spring对bean定义的抽象,封装bean的各种元数据信息,注意,它只是bean定义信息的封装,并不是bean实例).其流程大体为:
-*	将配置文件的加载解析委托给XmlBeanDefinitionReader来处理.
-*	XmlBeanDefinitionReader委托给ResourceLoader来加载配置文件路径对应的文件加载为Resource(spring对配置配置文件的抽象)
-*	XmlBeanDefinitionReader将上述Resource资源列表委托给内部DefaultDocumentLoader,将资源处理为Document对象
-*	XmlBeanDefinitionReader将解析Document的工作委托给BeanDefinitionDocumentReader来处理.而BeanDefinitionDocumentReader内部会将解析工作再委托给BeanDefinitionParserDelegate来执行.在BeanDefinitionParserDelegate的解析工作中,会将配置文件中的各标签区分为两类来进行解析:
-	** 默认命名空间元素(这里会针对import,alias,bean,beans来做相应处理)
-	** 自定义命名空间元素,这里会根据标签来找到对应的NamespaceHandler,完成处理(例如,我们常见的<context:component-scan base-package="****"/>,就是通过其对应的ContextNamespaceHandler来处理的,在这个handler中,会注册component-scan对应的BeanDefinitionParser,通过对应BeanDefinitionParser#parse方法来处理完成注解bean的扫描并解析为BeanDefinition.更进一步的内部逻辑这里就不讲了.翻源码吧..)
+在该方法中,完成对配置文件中bean定义的解析,解析为BeanDefinition(它是spring对bean定义的抽象,封装bean的各种元数据信息,注意,它只是bean定义信息的封装,并不是bean实例).其流程大体为:  
+	*	将配置文件的加载解析委托给XmlBeanDefinitionReader来处理.
+	*	XmlBeanDefinitionReader委托给ResourceLoader来加载配置文件路径对应的文件加载为Resource(spring对配置配置文件的抽象)
+	*	XmlBeanDefinitionReader将上述Resource资源列表委托给内部DefaultDocumentLoader,将资源处理为Document对象
+	*	XmlBeanDefinitionReader将解析Document的工作委托给BeanDefinitionDocumentReader来处理.而BeanDefinitionDocumentReader内部会将解析工作再委托给BeanDefinitionParserDelegate来执行.在BeanDefinitionParserDelegate的解析工作中,会将配置文件中的各标签区分为两类来进行解析:
+		*	默认命名空间元素(这里会针对import,alias,bean,beans来做相应处理)
+		*	自定义命名空间元素,这里会根据标签来找到对应的NamespaceHandler,完成处理(例如,我们常见的\<context:component-scan base-package="com.simba.abc"/>,就是通过其对应的ContextNamespaceHandler来处理的,在这个handler中,会注册component-scan对应的BeanDefinitionParser,通过对应BeanDefinitionParser#parse方法来处理完成注解bean的扫描并解析为BeanDefinition.更进一步的内部逻辑这里就不讲了.翻源码吧..)
 
 <font color="red">至此,解析为BeanDefinition的工作完成.总结一句就是,通过各种委托来处理解析工作.</font>
 
 
+#####	prepareBeanFactory(beanFactory);
+
+完成对BeanFactory的一些特性设置工作.具体的,翻源码看注释吧,写的很清楚
+
+#####	postProcessBeanFactory(beanFactory);
+
+允许在上下文子类中对bean工厂进行后处理。  
+
+标准化初始化后,修改应用程序上下文的内部bean工厂.在那时候,所有bean定义都将已经被加载完成,但还未实例化任何bean.这允许在某些ApplicationContext实现中注册特殊的BeanPostProcessor等.
