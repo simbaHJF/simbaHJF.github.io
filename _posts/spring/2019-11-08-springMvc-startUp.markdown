@@ -289,12 +289,21 @@ public void refresh() throws BeansException, IllegalStateException {
 <font color="red">至此,解析为BeanDefinition的工作完成.总结一句就是,通过各种委托来处理解析工作.</font>
 
 
+
 #####	prepareBeanFactory(beanFactory);
 
 完成对BeanFactory的一些特性设置工作.具体的,翻源码看注释吧,写的很清楚
+
+
 
 #####	postProcessBeanFactory(beanFactory);
 
 允许在上下文子类中对bean工厂进行后处理。  
 
 标准化初始化后,修改应用程序上下文的内部bean工厂.在那时候,所有bean定义都将已经被加载完成,但还未实例化任何bean.这允许在某些ApplicationContext实现中注册特殊的BeanPostProcessor等.
+
+因为我们这里的ApplicationContext实现类为XmlWebApplicationContext,它postProcessBeanFactory方法继承自其父类AbstractRefreshableWebApplicationContext,注册了一个与Servlet一些设置相关的后置处理器ServletContextAwareProcessor
+
+
+
+#####	
