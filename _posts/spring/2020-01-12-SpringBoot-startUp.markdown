@@ -1,6 +1,6 @@
 ---
 layout:     post
-title:      "springmvc 启动流程"
+title:      "springboot 启动流程"
 date:       2019-11-08 17:00:00 +0800
 author:     "simba"
 header-img: "img/post-bg-miui6.jpg"
@@ -9,141 +9,134 @@ tags:
 
 ---
 
-##	servlet容器启动
+#	SpringApplication类初始化过程
 
-在web.xml文件中一般会配置servlet容器上下文监听器,如下:
+##	SpringBoot项目的main方法入口
+
 ```
-<listener>
-	<listener-class>org.springframework.web.context.ContextLoaderListener</listener-class>
-</listener>
-```
+@SpringBootApplication
+public class SpringBootStudyApplication {
 
-当tomcat容器启动完成后,会执行ContextLoaderListener#contextInitialized这一回调方法.来完成spring中容器的初始化.
+    public static void main(String[] args) {
+        SpringApplication.run(SpringBootStudyApplication.class, args);
+    }
 
-##	spring容器的启动
-```
-public void contextInitialized(ServletContextEvent event) {
-	initWebApplicationContext(event.getServletContext());
-}
-```
-进入initWebApplicationContext方法内部,具体执行逻辑如下:
-```
-public WebApplicationContext initWebApplicationContext(ServletContext servletContext) {
-	if (servletContext.getAttribute(WebApplicationContext.ROOT_WEB_APPLICATION_CONTEXT_ATTRIBUTE) != null) {
-		throw new IllegalStateException(
-				"Cannot initialize context because there is already a root application context present - " +
-				"check whether you have multiple ContextLoader* definitions in your web.xml!");
-	}
-	servletContext.log("Initializing Spring root WebApplicationContext");
-	Log logger = LogFactory.getLog(ContextLoader.class);
-	if (logger.isInfoEnabled()) {
-		logger.info("Root WebApplicationContext: initialization started");
-	}
-	long startTime = System.currentTimeMillis();
-	try {
-		// Store context in local instance variable, to guarantee that
-		// it is available on ServletContext shutdown.
-		if (this.context == null) {
-			this.context = createWebApplicationContext(servletContext);
-		}
-		if (this.context instanceof ConfigurableWebApplicationContext) {
-			ConfigurableWebApplicationContext cwac = (ConfigurableWebApplicationContext) this.context;
-			if (!cwac.isActive()) {
-				// The context has not yet been refreshed -> provide services such as
-				// setting the parent context, setting the application context id, etc
-				if (cwac.getParent() == null) {
-					// The context instance was injected without an explicit parent ->
-					// determine parent for root web application context, if any.
-					ApplicationContext parent = loadParentContext(servletContext);
-					cwac.setParent(parent);
-				}
-				configureAndRefreshWebApplicationContext(cwac, servletContext);
-			}
-		}
-		servletContext.setAttribute(WebApplicationContext.ROOT_WEB_APPLICATION_CONTEXT_ATTRIBUTE, this.context);
-
-		ClassLoader ccl = Thread.currentThread().getContextClassLoader();
-		if (ccl == ContextLoader.class.getClassLoader()) {
-			currentContext = this.context;
-		}
-		else if (ccl != null) {
-			currentContextPerThread.put(ccl, this.context);
-		}
-
-		if (logger.isInfoEnabled()) {
-			long elapsedTime = System.currentTimeMillis() - startTime;
-			logger.info("Root WebApplicationContext initialized in " + elapsedTime + " ms");
-		}
-
-		return this.context;
-	}
-	catch (RuntimeException | Error ex) {
-		logger.error("Context initialization failed", ex);
-		servletContext.setAttribute(WebApplicationContext.ROOT_WEB_APPLICATION_CONTEXT_ATTRIBUTE, ex);
-		throw ex;
-	}
 }
 ```
 
-###	容器的创建
-首先来看一下spring是如何决定创建的容器类型,其逻辑如下:  
-this.context = createWebApplicationContext(servletContext);
-
-跟进方法内部,具体逻辑为:
+查看run方法的实现并跟进底层,如下所示:
 ```
-protected Class<?> determineContextClass(ServletContext servletContext) {
-	String contextClassName = servletContext.getInitParameter(CONTEXT_CLASS_PARAM);
-	if (contextClassName != null) {
-		try {
-			return ClassUtils.forName(contextClassName, ClassUtils.getDefaultClassLoader());
-		}
-		catch (ClassNotFoundException ex) {
-			throw new ApplicationContextException(
-					"Failed to load custom context class [" + contextClassName + "]", ex);
-		}
-	}
-	else {
-		contextClassName = defaultStrategies.getProperty(WebApplicationContext.class.getName());
-		try {
-			return ClassUtils.forName(contextClassName, ContextLoader.class.getClassLoader());
-		}
-		catch (ClassNotFoundException ex) {
-			throw new ApplicationContextException(
-					"Failed to load default context class [" + contextClassName + "]", ex);
-		}
-	}
+public static ConfigurableApplicationContext run(Class<?>[] primarySources, String[] args) {
+	return new SpringApplication(primarySources).run(args);
 }
 ```
 
-它的过程如下:
-*	如果配置了contextClass参数,则容器类型即为该参数值指定的class类型.例如:
+上面过程是,首先创建一个SpringApplication实例,然后调用SpringApplication实例的run方法.下面依次来进行分析.
+
+
+##	SpringApplication实例的创建
+
+跟进SpringApplication的构造方法到底层,代码如下:
+```
+public SpringApplication(ResourceLoader resourceLoader, Class<?>... primarySources) {
+	this.resourceLoader = resourceLoader;
+	Assert.notNull(primarySources, "PrimarySources must not be null");
+	this.primarySources = new LinkedHashSet<>(Arrays.asList(primarySources));
+	//推断应用类型，后面会根据类型初始化对应的环境。常用的一般都是servlet环境
+	this.webApplicationType = WebApplicationType.deduceFromClasspath();
+	//初始化classpath下 META-INF/spring.factories中已配置的ApplicationContextInitializer
+	setInitializers((Collection) getSpringFactoriesInstances(ApplicationContextInitializer.class));
+	//初始化classpath下所有已配置的 ApplicationListener
+	setListeners((Collection) getSpringFactoriesInstances(ApplicationListener.class));
+	//根据调用栈，推断出 main 方法的类名
+	this.mainApplicationClass = deduceMainApplicationClass();
+}
+```
+下面来依次分析下上述方法内部逻辑:
+
+###		1.WebApplicationType.deduceFromClasspath()
 
 ```
-<context-param>
-	<param-name>contextClass</param-name>
-	<param-value>
-		org.springframework.web.context.support.AnnotationConfigWebApplicationContext
-	</param-value>
-</context-param>
+/**
+ * The application should not run as a web application and should not start an
+ * embedded web server.
+ */
+NONE,
+/**
+ * The application should run as a servlet-based web application and should start an
+ * embedded servlet web server.
+ */
+SERVLET,
+/**
+ * The application should run as a reactive web application and should start an
+ * embedded reactive web server.
+ */
+REACTIVE;
+private static final String[] SERVLET_INDICATOR_CLASSES = { "javax.servlet.Servlet",
+		"org.springframework.web.context.ConfigurableWebApplicationContext" };
+private static final String WEBMVC_INDICATOR_CLASS = "org.springframework.web.servlet.DispatcherServlet";
+private static final String WEBFLUX_INDICATOR_CLASS = "org.springframework.web.reactive.DispatcherHandler";
+private static final String JERSEY_INDICATOR_CLASS = "org.glassfish.jersey.servlet.ServletContainer";
+private static final String SERVLET_APPLICATION_CONTEXT_CLASS = "org.springframework.web.context.WebApplicationContext";
+private static final String REACTIVE_APPLICATION_CONTEXT_CLASS = "org.springframework.boot.web.reactive.context.ReactiveWebApplicationContext";
+
+/**
+ * 判断 应用的类型
+ * NONE: 应用程序不是web应用，也不应该用web服务器去启动
+ * SERVLET: 应用程序应作为基于servlet的web应用程序运行，并应启动嵌入式servlet web（tomcat）服务器。
+ * REACTIVE: 应用程序应作为 reactive web应用程序运行，并应启动嵌入式 reactive web服务器。
+ * @return
+ */
+static WebApplicationType deduceFromClasspath() {
+	if (ClassUtils.isPresent(WEBFLUX_INDICATOR_CLASS, null) && !ClassUtils.isPresent(WEBMVC_INDICATOR_CLASS, null)
+			&& !ClassUtils.isPresent(JERSEY_INDICATOR_CLASS, null)) {
+		return WebApplicationType.REACTIVE;
+	}
+	for (String className : SERVLET_INDICATOR_CLASSES) {
+		if (!ClassUtils.isPresent(className, null)) {
+			return WebApplicationType.NONE;
+		}
+	}
+	return WebApplicationType.SERVLET;
+}
 ```
 
-*	否则执行  
-contextClassName = defaultStrategies.getProperty(WebApplicationContext.class.getName());  
-来获取容器类型.其中defaultStrategies会加载ContextLoader.properties文件中的属性,在该文件中,对容器class类型进行了默认设置.<br>
-ContextLoader.properties内容如下:
+返回类型是WebApplicationType的枚举值,WebApplicationType有三个枚举,三个枚举的意义如注释  
+具体判断逻辑如下  
+*	WebApplicationType.REACTIVE  classpath下存在org.springframework.web.reactive.DispatcherHandler
+*	WebApplicationType.SERVLET classpath下存在javax.servlet.Servlet或者org.springframework.web.context.ConfigurableWebApplicationContext
+*	WebApplicationType.NONE 不满足以上条件
 
+###		2.setInitializers
+
+首先通过getSpringFactoriesInstances(ApplicationContextInitializer.class)方法获取ApplicationContextInitializer类型的集合  
+其原理是,初始化classpath下 META-INF/spring.factories中已配置的ApplicationContextInitializer.
 ```
-# Default WebApplicationContext implementation class for ContextLoader.
-# Used as fallback when no explicit context implementation has been specified as context-param.
-# Not meant to be customized by application developers.
-
-org.springframework.web.context.WebApplicationContext=org.springframework.web.context.support.XmlWebApplicationContext
+private <T> Collection<T> getSpringFactoriesInstances(Class<T> type, Class<?>[] parameterTypes, Object... args) {
+	ClassLoader classLoader = getClassLoader();
+	// Use names and ensure unique to protect against duplicates
+	Set<String> names = new LinkedHashSet<>(SpringFactoriesLoader.loadFactoryNames(type, classLoader));
+	List<T> instances = createSpringFactoriesInstances(type, parameterTypes, classLoader, args, names);
+	AnnotationAwareOrderComparator.sort(instances);
+	return instances;
+}
 ```
 
-*	通过反射,创建对应容器class类型的一个实例.
+这里,首先通过SpringFactoriesLoader.loadFactoryNames(type, classLoader)方法,获取到META-INF/spring.factories文件中配置的ApplicationContextInitializer类名称;然后通过createSpringFactoriesInstances方法创建对应的Spring工厂实例;然后对Spring工厂实例排序(org.springframework.core.annotation.Order注解指定的顺序).
 
-下面来看下XmlWebApplicationContext的类图:
-![Qv3iM6.png](https://s2.ax1x.com/2019/12/21/Qv3iM6.png)
+具体初始化的ApplicationContextInitializer实例包括以下几个:
+![losnBj.png](https://s2.ax1x.com/2020/01/12/losnBj.png)
+![losUb9.png](https://s2.ax1x.com/2020/01/12/losUb9.png)
+
+ApplicationContextInitializer是Spring框架的类,这个类的主要目的就是在ConfigurableApplicationContext调用refresh()方法之前,回调这个类的initialize方法.通过  ConfigurableApplicationContext 的实例获取容器的环境Environment，从而实现对配置文件的修改完善等工作.
+
+**这里的通过META-INF/spring.factories文件来加载类的方式,是SpringBoot中的一种SPI扩展机制.**
+
+###		3.setListeners
+
+初始化classpath下META-INF/spring.factories中已配置的ApplicationListener.  
+ApplicationListener的加载过程和上面的ApplicationContextInitializer类的加载过程一样.  
+ApplicationListener是spring的事件监听器,典型的观察者模式,通过ApplicationEvent类和ApplicationListener接口,可以实现对Spring容器全生命周期的监听.
 
 
 ###	容器初始化
