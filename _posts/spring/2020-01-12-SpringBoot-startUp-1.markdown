@@ -1,7 +1,7 @@
 ---
 layout:     post
-title:      "springboot 启动流程"
-date:       2019-11-08 17:00:00 +0800
+title:      "springboot启动流程----SpringApplication类初始化"
+date:       2020-01-12 20:00:00 +0800
 author:     "simba"
 header-img: "img/post-bg-miui6.jpg"
 tags:
@@ -24,7 +24,7 @@ public class SpringBootStudyApplication {
 }
 ```
 
-查看run方法的实现并跟进底层,如下所示:
+查看SpringApplication.run方法的实现并跟进底层,如下所示:
 ```
 public static ConfigurableApplicationContext run(Class<?>[] primarySources, String[] args) {
 	return new SpringApplication(primarySources).run(args);
@@ -122,7 +122,7 @@ private <T> Collection<T> getSpringFactoriesInstances(Class<T> type, Class<?>[] 
 }
 ```
 
-这里,首先通过SpringFactoriesLoader.loadFactoryNames(type, classLoader)方法,获取到META-INF/spring.factories文件中配置的ApplicationContextInitializer类名称;然后通过createSpringFactoriesInstances方法创建对应的Spring工厂实例;然后对Spring工厂实例排序(org.springframework.core.annotation.Order注解指定的顺序).
+这里,首先通过SpringFactoriesLoader.loadFactoryNames(type, classLoader)方法,获取到META-INF/spring.factories文件中配置的ApplicationContextInitializer类名称;然后通过createSpringFactoriesInstances方法创建对应的ApplicationContextInitializer实例;然后对它们排序(org.springframework.core.annotation.Order注解指定的顺序).
 
 具体初始化的ApplicationContextInitializer实例包括以下几个:
 ![losnBj.png](https://s2.ax1x.com/2020/01/12/losnBj.png)
@@ -136,8 +136,10 @@ ApplicationContextInitializer是Spring框架的类,这个类的主要目的就�
 
 初始化classpath下META-INF/spring.factories中已配置的ApplicationListener.  
 ApplicationListener的加载过程和上面的ApplicationContextInitializer类的加载过程一样.  
-ApplicationListener是spring的事件监听器,典型的观察者模式,通过ApplicationEvent类和ApplicationListener接口,可以实现对Spring容器全生命周期的监听.
-
+ApplicationListener是spring的事件监听器,典型的观察者模式,通过ApplicationEvent类和ApplicationListener接口,可以实现对Spring容器全生命周期的监听.  
+具体初始化的ApplicationListener实例包括如下:
+![lTrZVA.png](https://s2.ax1x.com/2020/01/12/lTrZVA.png)
+![lTcKoj.png](https://s2.ax1x.com/2020/01/12/lTcKoj.png)
 
 ###	容器初始化
 容器初始化的流程在configureAndRefreshWebApplicationContext方法中实现.
