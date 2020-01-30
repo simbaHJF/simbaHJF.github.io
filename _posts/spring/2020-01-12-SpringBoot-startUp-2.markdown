@@ -280,3 +280,201 @@ public GenericApplicationContext() {
 ```
 
 ``context就是我们熟悉的上下文(也有人称之为容器,都可以,看个人爱好和理解),而beanFactory就是我们所说的IoC容器的真实面孔了.``
+
+
+##	4.	刷新应用上下文前的准备阶段
+
+首先看prepareContext()方法的源码:
+
+```
+private void prepareContext(ConfigurableApplicationContext context, ConfigurableEnvironment environment,
+		SpringApplicationRunListeners listeners, ApplicationArguments applicationArguments, Banner printedBanner) {
+
+	//设置容器环境
+	context.setEnvironment(environment);
+
+	//执行容器后置处理
+	postProcessApplicationContext(context);
+
+	//执行容器中的 ApplicationContextInitializer
+	applyInitializers(context);
+
+	//发布ApplicationContextInitializedEvent事件,触发相应监听器的相关执行逻辑
+	listeners.contextPrepared(context);
+	if (this.logStartupInfo) {
+		logStartupInfo(context.getParent() == null);
+		logStartupProfileInfo(context);
+	}
+	// Add boot specific singleton beans
+	//将main函数中的args参数封装成单例Bean，注册进容器
+	ConfigurableListableBeanFactory beanFactory = context.getBeanFactory();
+	beanFactory.registerSingleton("springApplicationArguments", applicationArguments);
+
+	//将 printedBanner 也封装成单例，注册进容器
+	if (printedBanner != null) {
+		beanFactory.registerSingleton("springBootBanner", printedBanner);
+	}
+	if (beanFactory instanceof DefaultListableBeanFactory) {
+		((DefaultListableBeanFactory) beanFactory)
+				.setAllowBeanDefinitionOverriding(this.allowBeanDefinitionOverriding);
+	}
+	if (this.lazyInitialization) {
+		context.addBeanFactoryPostProcessor(new LazyInitializationBeanFactoryPostProcessor());
+	}
+	// Load the sources
+	Set<Object> sources = getAllSources();
+	Assert.notEmpty(sources, "Sources must not be empty");
+
+	//加载我们的启动类，将启动类注入容器
+	load(context, sources.toArray(new Object[0]));
+
+	//发布ApplicationPreparedEvent事件,触发相关监听器的相关逻辑执行
+	listeners.contextLoaded(context);
+}
+```
+
+这里重点分析一下load方法.  
+首先看下该方法源码:
+```
+/**
+ * Load beans into the application context.
+ * @param context the context to load beans into
+ * @param sources the sources to load
+ */
+protected void load(ApplicationContext context, Object[] sources) {
+	if (logger.isDebugEnabled()) {
+		logger.debug("Loading source " + StringUtils.arrayToCommaDelimitedString(sources));
+	}
+
+	//创建 BeanDefinitionLoader 
+	BeanDefinitionLoader loader = createBeanDefinitionLoader(getBeanDefinitionRegistry(context), sources);
+	if (this.beanNameGenerator != null) {
+		loader.setBeanNameGenerator(this.beanNameGenerator);
+	}
+	if (this.resourceLoader != null) {
+		loader.setResourceLoader(this.resourceLoader);
+	}
+	if (this.environment != null) {
+		loader.setEnvironment(this.environment);
+	}
+	loader.load();
+}
+```
+
+
+###	4.1	createBeanDefinitionLoader
+
+先来看下该方法所需的第一个参数,也就是BeanDefinitionRegistry的获取方式
+```
+/**
+ * Get the bean definition registry.
+ * @param context the application context
+ * @return the BeanDefinitionRegistry if it can be determined
+ */
+private BeanDefinitionRegistry getBeanDefinitionRegistry(ApplicationContext context) {
+	if (context instanceof BeanDefinitionRegistry) {
+		return (BeanDefinitionRegistry) context;
+	}
+	if (context instanceof AbstractApplicationContext) {
+		return (BeanDefinitionRegistry) ((AbstractApplicationContext) context).getBeanFactory();
+	}
+	throw new IllegalStateException("Could not locate BeanDefinitionRegistry");
+}
+```
+
+我们此时的ApplicationContext实际类型是:AnnotationConfigServletWebServerApplicationContext,由前面的类继承关系图得知,它是BeanDefinitionRegistry的实现类,因此会走第一个if分支返回.
+
+BeanDefinitionRegistry定义了很重要的方法registerBeanDefinition(),该方法将BeanDefinition注册进DefaultListableBeanFactory容器的beanDefinitionMap中.
+
+接下来就是创建BeanDefinitionLoader
+```
+protected BeanDefinitionLoader createBeanDefinitionLoader(BeanDefinitionRegistry registry, Object[] sources) {
+	return new BeanDefinitionLoader(registry, sources);
+}
+```
+
+跟进到内部实现:
+```
+/**
+ * Create a new {@link BeanDefinitionLoader} that will load beans into the specified
+ * {@link BeanDefinitionRegistry}.
+ * @param registry the bean definition registry that will contain the loaded beans
+ * @param sources the bean sources
+ */
+BeanDefinitionLoader(BeanDefinitionRegistry registry, Object... sources) {
+	Assert.notNull(registry, "Registry must not be null");
+	Assert.notEmpty(sources, "Sources must not be empty");
+	this.sources = sources;
+
+	//注解形式的Bean定义读取器 比如：@Configuration @Bean @Component @Controller @Service等等
+	this.annotatedReader = new AnnotatedBeanDefinitionReader(registry);
+
+	//XML形式的Bean定义读取器
+	this.xmlReader = new XmlBeanDefinitionReader(registry);
+	if (isGroovyPresent()) {
+		this.groovyReader = new GroovyBeanDefinitionReader(registry);
+	}
+
+	//类路径扫描器
+	this.scanner = new ClassPathBeanDefinitionScanner(registry);
+
+	//扫描器添加排除过滤器
+	this.scanner.addExcludeFilter(new ClassExcludeFilter(sources));
+}
+```
+
+###	4.2	loader.load()
+
+```
+/**
+ * Load the sources into the reader.
+ * @return the number of loaded beans
+ */
+int load() {
+	int count = 0;
+	for (Object source : this.sources) {
+		count += load(source);
+	}
+	return count;
+}
+private int load(Object source) {
+	Assert.notNull(source, "Source must not be null");
+	if (source instanceof Class<?>) {
+		return load((Class<?>) source);
+	}
+	if (source instanceof Resource) {
+		return load((Resource) source);
+	}
+	if (source instanceof Package) {
+		return load((Package) source);
+	}
+	if (source instanceof CharSequence) {
+		return load((CharSequence) source);
+	}
+	throw new IllegalArgumentException("Invalid source type " + source.getClass());
+}
+```
+
+当前我们的主类会按Class加载.  
+继续跟进load方法.
+
+```
+private int load(Class<?> source) {
+	if (isGroovyPresent() && GroovyBeanDefinitionSource.class.isAssignableFrom(source)) {
+		// Any GroovyLoaders added in beans{} DSL can contribute beans here
+		GroovyBeanDefinitionSource loader = BeanUtils.instantiateClass(source, GroovyBeanDefinitionSource.class);
+		load(loader);
+	}
+	if (isComponent(source)) {
+		//将启动类的BeanDefinition注册进beanDefinitionMap
+		this.annotatedReader.register(source);
+		return 1;
+	}
+	return 0;
+}
+```
+
+isComponent(source)判断主类是不是存在@Component注解,主类@SpringBootApplication是一个组合注解,包含@Component.
+
+
+**<font color="red">后面就是refresh方法,这是spring启动的重点,放在下一篇中.</font>**
