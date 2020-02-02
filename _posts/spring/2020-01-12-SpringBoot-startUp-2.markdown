@@ -108,7 +108,7 @@ EventPublishingRunListener监听器是Spring容器的启动监听器.调用其st
 
 ``
 这里稍微总结一下SpringApplicationRunListener和ApplicationListener.  
-ApplicationListener是在创建SpringApplication实例的时候,根据META-INF/spring.factories文件初始化的的监听器,实现了响应事件发生后具体的执行逻辑.  
+ApplicationListener是在创建SpringApplication实例的时候,根据META-INF/spring.factories文件初始化的的监听器,实现了相应事件发生后具体的执行逻辑.  
 而SpringApplicationRunListener是启动监听器,是用来触发上面那些具体监听器的,触发方式就是通过发布相应的事件,也就是SpringApplicationEvent.
 ``
 

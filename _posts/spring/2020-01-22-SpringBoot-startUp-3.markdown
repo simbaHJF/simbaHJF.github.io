@@ -10,7 +10,7 @@ tags:
 ---
 
 
-#	AbstractApplicationContext类的refresh()方法
+#	AbstractApplicationContext的refresh()
 
 该方法是容器初始化的关键方法,采用典型的模板方法设计模式.  
 先来看先源码:
@@ -91,7 +91,7 @@ protected ConfigurableListableBeanFactory obtainFreshBeanFactory() {
 }
 ```
 
-上述源码中调用的两个方法,在GenericApplicationContext中都进行了重写,跟进源码中,发现其实现很简单,没有做什么复杂处理了.这点跟原来只使用SpringMVC时,执行AbstractRefreshableApplicationContext类的refreshBeanFactory方法由很大不同,原来的逻辑中,会在这个方法里完成配置文件的BeanDefinition的解析和注册.而现在在GenericApplicationContext中就很简单了,只是几个简单的属性设置.
+上述源码中调用的两个方法,在GenericApplicationContext中都进行了重写,跟进源码中,发现其实现很简单,没有做什么复杂处理了.这点跟原来只使用SpringMVC时,执行AbstractRefreshableApplicationContext类的refreshBeanFactory方法有很大不同,原来的逻辑中,会在这个方法里完成配置文件的BeanDefinition的解析和注册.而现在在GenericApplicationContext中就很简单了,只是几个简单的属性设置.
 
 
 ##	2.	prepareBeanFactory(beanFactory);
@@ -158,7 +158,7 @@ protected void prepareBeanFactory(ConfigurableListableBeanFactory beanFactory) {
 
 ##	3.	postProcessBeanFactory(beanFactory);
 
-允许在上下文子类中对bean工厂进行后处理.  
+允许在上下文子类中对beanFactory进行后处理.  
 标准化初始化后,修改应用程序上下文的内部bean工厂.在那时候,所有bean定义都将已经被加载完成,但还未实例化任何bean.简言之,BeanFactory的后置处理器可以修改BeanDefinition的属性信息.
 
 ##	4.	invokeBeanFactoryPostProcessors(beanFactory);(重点方法)
@@ -167,7 +167,8 @@ IoC容器的BeanDefinition解析注册过程包括三个步骤,在invokeBeanFact
 
 ###	第一步:Resource定位
 
-在SpringBoot中,我们都知道他的包扫描是从主类所在的包开始扫描的,prepareContext()方法中,会先将主类解析成BeanDefinition,然后在refresh()方法的invokeBeanFactoryPostProcessors()方法中解析主类的BeanDefinition获取basePackage的路径.这样就完成了定位的过程.其次SpringBoot的各种starter是通过SPI扩展机制实现的自动装配,SpringBoot的自动装配同样也是在invokeBeanFactoryPostProcessors()方法中实现的.还有一种情况,在SpringBoot中有很多的@EnableXXX注解,细心点进去看的应该就知道其底层是@Import注解,在invokeBeanFactoryPostProcessors()方法中也实现了对该注解指定的配置类的定位加载.
+在SpringBoot中,我们都知道他的包扫描是从主类所在的包开始扫描的,prepareContext()方法中,会先将主类解析成BeanDefinition,然后在refresh()方法的invokeBeanFactoryPostProcessors()方法中解析主类的BeanDefinition获取basePackage的路径.这样就完成了定位的过程.其次SpringBoot的各种starter是通过SPI扩展机制实现的自动装配,SpringBoot的自动装配同样也是在invokeBeanFactoryPostProcessors()方法中实现的.还有一种情况,在SpringBoot中有很多的@EnableXXX注解,细心点进去看的应该就知道其底层是@Import注解,在invokeBeanFactoryPostProcessors()方法中也实现了对该注解指定的配置类的定位加载.  
+prepareContext()方法在上一篇文章中讲过.
 
 常规的在SpringBoot中有三种实现定位,第一个是主类所在包的,第二个是SPI扩展机制实现的自动装配（比如各种starter）,第三种就是@Import注解指定的类.(对于非常规的不说了)
 
@@ -187,6 +188,7 @@ TIPS:
 
 ###	BeanDefinition解析载入和注册的源码过程详述
 
+BeanDefinition解析载入和注册过程主要在AbstractApplicationContext的refresh方法中invokeBeanFactoryPostProcessors(beanFactory)方法逻辑中实现.
 
 a.
 ```
@@ -201,7 +203,9 @@ protected void invokeBeanFactoryPostProcessors(ConfigurableListableBeanFactory b
 }
 ```
 
-b.
+b.  
+跟进PostProcessorRegistrationDelegate.invokeBeanFactoryPostProcessors(beanFactory, getBeanFactoryPostProcessors());方法
+
 ```
 public static void invokeBeanFactoryPostProcessors(
 		ConfigurableListableBeanFactory beanFactory, List<BeanFactoryPostProcessor> beanFactoryPostProcessors) {
@@ -321,6 +325,14 @@ public static void invokeBeanFactoryPostProcessors(
 	beanFactory.clearMetadataCache();
 }
 ```
+
+这里重点是invokeBeanDefinitionRegistryPostProcessors方法的执行,可以看到它有多处执行过程.简单总结一下就是:
+
+这里会获取BeanDefinitionRegistryPostProcessor,然后按照一定的要求和先后顺序,一部分一部分的将其添加到currentRegistryProcessors中来执行.  
+当前一部分BeanDefinitionRegistryPostProcessor执行完成后,清空currentRegistryProcessors,然后再获取下一部分BeanDefinitionRegistryPostProcessor来执行处理.  
+因此BeanDefinitionRegistryPostProcessor的执行是有优先级先后顺序的.
+
+**<font color="red">这里最重要的一个BeanDefinitionRegistryPostProcessor是ConfigurationClassPostProcessor,它实现了PriorityOrdered,是最优先执行的一个BeanDefinitionRegistryPostProcessor.ConfigurationClassPostProcessor中完成了BeanDefinition的扫描解析和注册工作.</font>**
 
 c.
 ```

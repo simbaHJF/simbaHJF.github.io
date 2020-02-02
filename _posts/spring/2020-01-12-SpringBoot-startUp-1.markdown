@@ -140,26 +140,3 @@ ApplicationListener是spring的事件监听器,典型的观察者模式,通过Ap
 具体初始化的ApplicationListener实例包括如下:
 ![lTrZVA.png](https://s2.ax1x.com/2020/01/12/lTrZVA.png)
 ![lTcKoj.png](https://s2.ax1x.com/2020/01/12/lTcKoj.png)
-
-
-
-
-
-
-#####	prepareBeanFactory(beanFactory);
-
-完成对BeanFactory的一些特性设置工作.具体的,翻源码看注释吧,写的很清楚
-
-
-
-#####	postProcessBeanFactory(beanFactory);
-
-允许在上下文子类中对bean工厂进行后处理。  
-
-标准化初始化后,修改应用程序上下文的内部bean工厂.在那时候,所有bean定义都将已经被加载完成,但还未实例化任何bean.这允许在某些ApplicationContext实现中注册特殊的BeanPostProcessor等.
-
-因为我们这里的ApplicationContext实现类为XmlWebApplicationContext,它postProcessBeanFactory方法继承自其父类AbstractRefreshableWebApplicationContext,注册了一个与Servlet一些设置相关的后置处理器ServletContextAwareProcessor
-
-
-
-#####	
