@@ -492,7 +492,7 @@ public void parse(Set<BeanDefinitionHolder> configCandidates) {
 }
 ```
 
-debug进来,会进入到第一个条件判断分支
+debug进来,会进入到第一个条件判断分支,因为主类的@SpringBootApplication注解其实内部引入了@Component注解
 ![1VPeE9.png](https://s2.ax1x.com/2020/01/23/1VPeE9.png)
 
 然后跟进parse方法.
@@ -646,7 +646,7 @@ public Set<BeanDefinitionHolder> parse(AnnotationAttributes componentScan, final
         basePackages.add(ClassUtils.getPackageName(declaringClass));
     }
     ...
-    // 根据basePackages扫描类
+    // 根据basePackages扫描类,并完成BeanDefinition的解析和注册
     return scanner.doScan(StringUtils.toStringArray(basePackages));
 }
 ```
@@ -673,6 +673,7 @@ debug,跟进scanner.doScan方法,会来到如下代码段:
 因此,这个时候和主类在同一个包路径下的TestBean就无法被扫描到.一定要注意!!!!!!  
 
 
-剩下的,在c中的代码逻辑中完成的功能就是扫描解析BeanDefinition和注册了,这里就不在详述了.
+剩下的,在c中的代码逻辑中完成的功能就是通过ClassPathBeanDefinitionScanner的doScan方法扫描解析BeanDefinition和注册了,这里就不在详述了.
 
 
+BeanDefinition的解析注册工作就分析到这里,下一篇分析在BeanDefinition基础上,对bean进行创建和初始化.
