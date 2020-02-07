@@ -93,6 +93,32 @@ public void refresh() throws BeansException, IllegalStateException {
 他们的处理逻辑类似,主要就是将Bean中符合条件(需要进行依赖注入)的属性获取到,然后将这些信息合并到BeanDefinition中,以便于后面进行依赖注入.
 
 
+下面再来说一下这两个重要的BeanPostProcessor是什么时候以BeanDefinition的形式注册到registry中的.  
+先给出结论:AnnotationConfigServletWebServerApplicationContext时
+
+来看下其构造方法
+```
+public AnnotationConfigServletWebServerApplicationContext() {
+		this.reader = new AnnotatedBeanDefinitionReader(this);
+		this.scanner = new ClassPathBeanDefinitionScanner(this);
+	}
+```
+
+跟进this.reader = new AnnotatedBeanDefinitionReader(this);这一行到底层
+
+```
+public AnnotatedBeanDefinitionReader(BeanDefinitionRegistry registry, Environment environment) {
+	Assert.notNull(registry, "BeanDefinitionRegistry must not be null");
+	Assert.notNull(environment, "Environment must not be null");
+	this.registry = registry;
+	this.conditionEvaluator = new ConditionEvaluator(registry, environment, null);
+	AnnotationConfigUtils.registerAnnotationConfigProcessors(this.registry);
+}
+```
+
+可以看到AnnotationConfigUtils.registerAnnotationConfigProcessors(this.registry);这行方法调用.  
+也就是在这个方法内部,注册了这两个重要的BeanPostProcessor的BeanDefinition,以便于后面根据BeanDefinition来生成这两个Bean.
+
 
 ##	二.	finishBeanFactoryInitialization(beanFactory);
 

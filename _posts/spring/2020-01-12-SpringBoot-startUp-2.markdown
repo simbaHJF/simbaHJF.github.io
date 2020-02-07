@@ -103,7 +103,9 @@ private SpringApplicationRunListeners getRunListeners(String[] args) {
 
 从META-INF/spring.factories获取指定的SpringApplicationRunListener实例  
 具体包括:EventPublishingRunListener.如下:
+
 ![lTrZVA.png](https://s2.ax1x.com/2020/01/12/lTrZVA.png)
+
 EventPublishingRunListener监听器是Spring容器的启动监听器.调用其starting方法,将发布ApplicationStartingEvent事件.
 
 ``
