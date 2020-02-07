@@ -83,8 +83,15 @@ public void refresh() throws BeansException, IllegalStateException {
 
 ##	一.	registerBeanPostProcessors(beanFactory);
 
-注册各个BeanPostProcessor,这些BeanPostProcessor会在bean创建过程中进行前后置方法拦截调用以完成一些功能.  
-这里就先不做深入分析了.
+注册一些内部BeanPostProcessor.将这些内部BeanPostProcessor注册为Bean,这些BeanPostProcessor会在bean创建过程中进行前后置方法拦截调用以完成一些功能.  
+
+其中最重要也是最常见的两个BeanPostProcessor即是:
+
+*	AutowiredAnnotationBeanPostProcessor,   对@Autowired注解进行处理的(当然还包括一些其他注解的处理)
+*	CommonAnnotationBeanPostProcessor,	对@Resource注解进行处理(当然还包括一些其他注解的处理)
+
+他们的处理逻辑类似,主要就是将Bean中符合条件(需要进行依赖注入)的属性获取到,然后将这些信息合并到BeanDefinition中,以便于后面进行依赖注入.
+
 
 
 ##	二.	finishBeanFactoryInitialization(beanFactory);
@@ -595,6 +602,10 @@ protected Object doCreateBean(final String beanName, final RootBeanDefinition mb
 	synchronized (mbd.postProcessingLock) {
 		if (!mbd.postProcessed) {
 			try {
+				//	这里是前面三.1中所说的注册的那些内部BeanPostProcessor实例进行切入操作的时机
+				//  注意一点,这里能进行切入执行的BeanPostProcessor是MergedBeanDefinitionPostProcessor的子类
+				//	而CommonAnnotationBeanPostProcessor和AutowiredAnnotationBeanPostProcessor就是MergedBeanDefinitionPostProcessor的子类
+				//	因此@Resource和@Autowired注解的解析就是在这里做的(当然,还包括一些其他注解的处理)
 				applyMergedBeanDefinitionPostProcessors(mbd, beanType, beanName);
 			}
 			catch (Throwable ex) {
@@ -623,7 +634,13 @@ protected Object doCreateBean(final String beanName, final RootBeanDefinition mb
 	// Initialize the bean instance.
 	Object exposedObject = bean;
 	try {
+		// TODO 完成Bean初始化过程的第二步：为Bean的实例设置属性
+		// Bean依赖注入发生的地方
+		// 对bean进行属性填充，如果存在依赖于其他的bean的属性，则会递归的调用初始化依赖的bean
 		populateBean(beanName, mbd, instanceWrapper);
+
+		// TODO 完成Bean初始化过程的第三步：调用Bean的初始化方法（init-method）
+		// 调用初始化方法，比如init-method方法指定的方法
 		exposedObject = initializeBean(beanName, exposedObject, mbd);
 	}
 	catch (Throwable ex) {
@@ -672,3 +689,435 @@ protected Object doCreateBean(final String beanName, final RootBeanDefinition mb
 	return exposedObject;
 }
 ```
+
+将上述代码段中的核心方法对应到createBean的主体过程下即是:
+
+1.	Bean实例的创建,instanceWrapper = createBeanInstance(beanName, mbd, args);
+2.	Bean实例的初始化(依赖注入等)	,populateBean(beanName, mbd, instanceWrapper);
+3.	调用各初始化方法,exposedObject = initializeBean(beanName, exposedObject, mbd);
+
+下面,就按着这三个关键步骤,逐个分析相应的方法逻辑.
+
+
+####	三.3.1	Bean实例的创建,instanceWrapper = createBeanInstance(beanName, mbd, args);
+
+```
+protected BeanWrapper createBeanInstance(String beanName, RootBeanDefinition mbd, @Nullable Object[] args) {
+	// Make sure bean class is actually resolved at this point.
+	// 确保此时需要创建的Bean的class类型已经被解析.
+	Class<?> beanClass = resolveBeanClass(mbd, beanName);
+	if (beanClass != null && !Modifier.isPublic(beanClass.getModifiers()) && !mbd.isNonPublicAccessAllowed()) {
+		throw new BeanCreationException(mbd.getResourceDescription(), beanName,
+				"Bean class isn't public, and non-public access not allowed: " + beanClass.getName());
+	}
+	Supplier<?> instanceSupplier = mbd.getInstanceSupplier();
+	if (instanceSupplier != null) {
+		return obtainFromSupplier(instanceSupplier, beanName);
+	}
+	// 当有工厂方法的时候使用工厂方法初始化Bean,就是配置的时候指定FactoryMethod属性,
+	if (mbd.getFactoryMethodName() != null) {
+		return instantiateUsingFactoryMethod(beanName, mbd, args);
+	}
+	// Shortcut when re-creating the same bean...
+	boolean resolved = false;
+	boolean autowireNecessary = false;
+	if (args == null) {
+		synchronized (mbd.constructorArgumentLock) {
+			if (mbd.resolvedConstructorOrFactoryMethod != null) {
+				resolved = true;
+				autowireNecessary = mbd.constructorArgumentsResolved;
+			}
+		}
+	}
+	if (resolved) {
+		if (autowireNecessary) {
+			// 如果有有参数的构造函数,构造函数自动注入
+			// 这里spring会花费大量的精力去进行参数的匹配
+			return autowireConstructor(beanName, mbd, null, null);
+		}
+		else {
+			// 如果没有有参构造函数，使用默认构造函数构造
+			return instantiateBean(beanName, mbd);
+		}
+	}
+
+	// 使用带参数构造函数进行实例化
+	// Candidate constructors for autowiring?
+	Constructor<?>[] ctors = determineConstructorsFromBeanPostProcessors(beanClass, beanName);
+	if (ctors != null || mbd.getResolvedAutowireMode() == AUTOWIRE_CONSTRUCTOR ||
+			mbd.hasConstructorArgumentValues() || !ObjectUtils.isEmpty(args)) {
+		return autowireConstructor(beanName, mbd, ctors, args);
+	}
+	// Preferred constructors for default construction?
+	ctors = mbd.getPreferredConstructors();
+	if (ctors != null) {
+		return autowireConstructor(beanName, mbd, ctors, null);
+	}
+
+	// 使用默认的构造函数对Bean进行实例化
+	// No special handling: simply use no-arg constructor.
+	return instantiateBean(beanName, mbd);
+}
+```
+
+我们可以看到这里生成了Bean所包含的Java对象,这个对象的生成有很多种不同的方式,可以通过工厂方法生成,也可以通过容器的autowire特性生成,这些生成方式都是由BeanDefinition决定的.
+
+我们再以instantiateBean(beanName, mbd)为例,跟进看下其内部实现
+
+```
+protected BeanWrapper instantiateBean(final String beanName, final RootBeanDefinition mbd) {
+	// 使用默认的实例化策略对Bean进行实例化,默认的实例化策略是CglibSubclassingInstantiationStrategy
+	try {
+		Object beanInstance;
+		final BeanFactory parent = this;
+		if (System.getSecurityManager() != null) {
+			beanInstance = AccessController.doPrivileged((PrivilegedAction<Object>) () ->
+					getInstantiationStrategy().instantiate(mbd, beanName, parent),
+					getAccessControlContext());
+		}
+		else {
+			// getInstantiationStrategy()会返回CglibSubclassingInstantiationStrategy类的实例
+			beanInstance = getInstantiationStrategy().instantiate(mbd, beanName, parent);
+		}
+		BeanWrapper bw = new BeanWrapperImpl(beanInstance);
+		initBeanWrapper(bw);
+		return bw;
+	}
+	catch (Throwable ex) {
+		throw new BeanCreationException(
+				mbd.getResourceDescription(), beanName, "Instantiation of bean failed", ex);
+	}
+}
+```
+
+可以看到getInstantiationStrategy().instantiate处的调用,典型的策略模式的设计模式.
+
+这里使用CGLIB进行Bean的实例化.CGLIB是一个常用的字节码生成器的类库,其提供了一系列的API来提供生成和转换Java字节码的功能.在Spring AOP中同样也是可以使用CGLIB对Java的字节码进行增强.
+
+在IoC容器中,使用SimpleInstantiationStrategy类.这个类是Spring用来生成Bean对象的默认类,它提供了两种实例化Java对象的方法,一种是通过BeanUtils,它使用的是JVM的反射功能,一种是通过CGLIB来生成.
+
+getInstantiationStrategy()方法获取到CglibSubclassingInstantiationStrategy实例,instantiate()是CglibSubclassingInstantiationStrategy类的父类SimpleInstantiationStrategy实现的.
+
+
+继续跟进到CglibSubclassingInstantiationStrategy的父类SimpleInstantiationStrategy中,看下instantiate方法的实现:
+
+```
+public Object instantiate(RootBeanDefinition bd, @Nullable String beanName, BeanFactory owner) {
+	// Don't override the class with CGLIB if no overrides.
+	// 如果BeanDefinition中没有包含了重写的方法(也即bean没有需要动态替换的方法),则使用CGLIB,否则使用BeanUtils(也就是java反射)
+	if (!bd.hasMethodOverrides()) {
+		Constructor<?> constructorToUse;
+		synchronized (bd.constructorArgumentLock) {
+			constructorToUse = (Constructor<?>) bd.resolvedConstructorOrFactoryMethod;
+			if (constructorToUse == null) {
+				final Class<?> clazz = bd.getBeanClass();
+				if (clazz.isInterface()) {
+					throw new BeanInstantiationException(clazz, "Specified class is an interface");
+				}
+				try {
+					if (System.getSecurityManager() != null) {
+						constructorToUse = AccessController.doPrivileged(
+								(PrivilegedExceptionAction<Constructor<?>>) clazz::getDeclaredConstructor);
+					}
+					else {
+						constructorToUse = clazz.getDeclaredConstructor();
+					}
+					bd.resolvedConstructorOrFactoryMethod = constructorToUse;
+				}
+				catch (Throwable ex) {
+					throw new BeanInstantiationException(clazz, "No default constructor found", ex);
+				}
+			}
+		}
+		// 通过BeanUtils进行实例化,这个BeanUtils的实例化通过Constructor类实例化Bean
+		// 在BeanUtils中可以看到具体的调用ctor.newInstances(args)
+		return BeanUtils.instantiateClass(constructorToUse);
+	}
+	else {
+		// Must generate CGLIB subclass.
+		// TODO 使用CGLIB实例化对象
+		return instantiateWithMethodInjection(bd, beanName, owner);
+	}
+}
+```
+
+在SpringBoot中我们一般采用@Autowire的方式进行依赖注入,很少采用像SpringMVC那种在xml中使用\<lookup-method\>或者\<replaced-method\>等标签的方式对注入的属性进行override,所以在上面的代码中if(!bd.hasMethodOverrides())中的判断为true,会采用BeanUtils的实例化方式
+
+
+####	三.1.2	Bean实例的初始化(依赖注入等)	,populateBean(beanName, mbd, instanceWrapper);
+
+```
+protected void populateBean(String beanName, RootBeanDefinition mbd, @Nullable BeanWrapper bw) {
+	if (bw == null) {
+		if (mbd.hasPropertyValues()) {
+			throw new BeanCreationException(
+					mbd.getResourceDescription(), beanName, "Cannot apply property values to null instance");
+		}
+		else {
+			// Skip property population phase for null instance.
+			return;
+		}
+	}
+	// Give any InstantiationAwareBeanPostProcessors the opportunity to modify the
+	// state of the bean before properties are set. This can be used, for example,
+	// to support styles of field injection.
+	boolean continueWithPropertyPopulation = true;
+	// 调用InstantiationAwareBeanPostProcessor  Bean的后置处理器,在Bean注入属性前改变BeanDefinition的信息
+	if (!mbd.isSynthetic() && hasInstantiationAwareBeanPostProcessors()) {
+		for (BeanPostProcessor bp : getBeanPostProcessors()) {
+			if (bp instanceof InstantiationAwareBeanPostProcessor) {
+				InstantiationAwareBeanPostProcessor ibp = (InstantiationAwareBeanPostProcessor) bp;
+				if (!ibp.postProcessAfterInstantiation(bw.getWrappedInstance(), beanName)) {
+					continueWithPropertyPopulation = false;
+					break;
+				}
+			}
+		}
+	}
+	if (!continueWithPropertyPopulation) {
+		return;
+	}
+	// 这里取得在BeanDefinition中设置的property值，这些property来自对BeanDefinition的解析
+	PropertyValues pvs = (mbd.hasPropertyValues() ? mbd.getPropertyValues() : null);
+	int resolvedAutowireMode = mbd.getResolvedAutowireMode();
+	if (resolvedAutowireMode == AUTOWIRE_BY_NAME || resolvedAutowireMode == AUTOWIRE_BY_TYPE) {
+		MutablePropertyValues newPvs = new MutablePropertyValues(pvs);
+		// Add property values based on autowire by name if applicable.
+		// A. 这里对autowire注入的处理，autowire by name
+		if (resolvedAutowireMode == AUTOWIRE_BY_NAME) {
+			autowireByName(beanName, mbd, bw, newPvs);
+		}
+		// Add property values based on autowire by type if applicable.
+		// B. 这里对autowire注入的处理， autowire by type
+		if (resolvedAutowireMode == AUTOWIRE_BY_TYPE) {
+			autowireByType(beanName, mbd, bw, newPvs);
+		}
+		pvs = newPvs;
+	}
+	boolean hasInstAwareBpps = hasInstantiationAwareBeanPostProcessors();
+	boolean needsDepCheck = (mbd.getDependencyCheck() != AbstractBeanDefinition.DEPENDENCY_CHECK_NONE);
+	PropertyDescriptor[] filteredPds = null;
+	if (hasInstAwareBpps) {
+		if (pvs == null) {
+			pvs = mbd.getPropertyValues();
+		}
+		for (BeanPostProcessor bp : getBeanPostProcessors()) {
+			if (bp instanceof InstantiationAwareBeanPostProcessor) {
+				InstantiationAwareBeanPostProcessor ibp = (InstantiationAwareBeanPostProcessor) bp;
+				PropertyValues pvsToUse = ibp.postProcessProperties(pvs, bw.getWrappedInstance(), beanName);
+				if (pvsToUse == null) {
+					if (filteredPds == null) {
+						filteredPds = filterPropertyDescriptorsForDependencyCheck(bw, mbd.allowCaching);
+					}
+					// C. @Autowire @Resource @Value @Inject 等注解的依赖注入过程
+					pvsToUse = ibp.postProcessPropertyValues(pvs, filteredPds, bw.getWrappedInstance(), beanName);
+					if (pvsToUse == null) {
+						return;
+					}
+				}
+				pvs = pvsToUse;
+			}
+		}
+	}
+	if (needsDepCheck) {
+		if (filteredPds == null) {
+			filteredPds = filterPropertyDescriptorsForDependencyCheck(bw, mbd.allowCaching);
+		}
+		checkDependencies(beanName, mbd, filteredPds, pvs);
+	}
+	if (pvs != null) {
+		// 注入PropertyValues中的属性
+		applyPropertyValues(beanName, mbd, bw, pvs);
+	}
+}
+```
+
+这里说一下几个关键点:  
+1.	A处代码,和B处代码的applyPropertyValues()方法基本都是用于SpringMVC中采用xml配置Bean的方法,这里就不在深入介绍了,只需知道一点,xml解析bean的时候,是将xml中配置的属性依赖解析到BeanDefinition中的PropertyValues,然后再依赖PropertyValues中的数据来完成依赖注入的,而注解方式的依赖注入则不是.
+2.	C处代码pvs = ibp.postProcessPropertyValues(pvs, filteredPds, bw.getWrappedInstance(), beanName);这行是真正采用@Autowire @Resource @Value @Inject 等注解的依赖注入过程.
+
+
+这里以AutowiredAnnotationBeanPostProcessor为例,跟进C处代码:
+
+```
+public PropertyValues postProcessProperties(PropertyValues pvs, Object bean, String beanName) {
+	// 遍历,获取@Autowire,@Resource,@Value,@Inject等具备注入功能的注解
+	InjectionMetadata metadata = findAutowiringMetadata(beanName, bean.getClass(), pvs);
+	try {
+		// 属性注入
+		metadata.inject(bean, beanName, pvs);
+	}
+	catch (BeanCreationException ex) {
+		throw ex;
+	}
+	catch (Throwable ex) {
+		throw new BeanCreationException(beanName, "Injection of autowired dependencies failed", ex);
+	}
+	return pvs;
+}
+```
+
+AutowiredAnnotationBeanPostProcessor类实现了postProcessPropertyValues()方法.findAutowiringMetadata(beanName, bean.getClass(), pvs);方法会寻找在当前类中的被@Autowire,@Resource,@Value,@Inject等具备注入功能的注解的属性.
+
+
+再跟进metadata.inject(bean, beanName, pvs);代码看下内部实现:
+
+```
+public void inject(Object target, @Nullable String beanName, @Nullable PropertyValues pvs) throws Throwable {
+	Collection<InjectedElement> checkedElements = this.checkedElements;
+	Collection<InjectedElement> elementsToIterate =
+			(checkedElements != null ? checkedElements : this.injectedElements);
+	if (!elementsToIterate.isEmpty()) {
+		for (InjectedElement element : elementsToIterate) {
+			if (logger.isTraceEnabled()) {
+				logger.trace("Processing injected element of bean '" + beanName + "': " + element);
+			}
+			element.inject(target, beanName, pvs);
+		}
+	}
+}
+```
+
+继续跟进element.inject(target, beanName, pvs);这一行
+
+```
+// AutowiredAnnotationBeanPostProcessor类
+protected void inject(Object bean, @Nullable String beanName, @Nullable PropertyValues pvs) throws Throwable {
+	// 需要注入的字段
+	Field field = (Field) this.member;
+	// 需要注入的属性值
+	Object value;
+	if (this.cached) {
+		value = resolvedCachedArgument(beanName, this.cachedFieldValue);
+	}
+	else {
+		// @Autowired(required = false),当在该注解中设置为false的时候,如果有直接注入,没有跳过,不会报错
+		DependencyDescriptor desc = new DependencyDescriptor(field, this.required);
+		desc.setContainingClass(bean.getClass());
+		Set<String> autowiredBeanNames = new LinkedHashSet<>(1);
+		Assert.state(beanFactory != null, "No BeanFactory available");
+		TypeConverter typeConverter = beanFactory.getTypeConverter();
+		try {
+			// 通过BeanFactory 解决依赖关系
+			// 比如在webController中注入了webService,这个会去BeanFactory中去获取webService,也就是getBean()的逻辑
+			// 如果存在直接返回,不存在再执行createBean()逻辑
+			// 如果在webService中依然有依赖,依然会去继续递归
+			// 这里是一个复杂的递归逻辑
+			value = beanFactory.resolveDependency(desc, beanName, autowiredBeanNames, typeConverter);
+		}
+		catch (BeansException ex) {
+			throw new UnsatisfiedDependencyException(null, beanName, new InjectionPoint(field), ex);
+		}
+		synchronized (this) {
+			if (!this.cached) {
+				if (value != null || this.required) {
+					this.cachedFieldValue = desc;
+					registerDependentBeans(beanName, autowiredBeanNames);
+					if (autowiredBeanNames.size() == 1) {
+						String autowiredBeanName = autowiredBeanNames.iterator().next();
+						if (beanFactory.containsBean(autowiredBeanName) &&
+								beanFactory.isTypeMatch(autowiredBeanName, field.getType())) {
+							this.cachedFieldValue = new ShortcutDependencyDescriptor(
+									desc, autowiredBeanName, field.getType());
+						}
+					}
+				}
+				else {
+					this.cachedFieldValue = null;
+				}
+				this.cached = true;
+			}
+		}
+	}
+	if (value != null) {
+		ReflectionUtils.makeAccessible(field);
+		field.set(bean, value);
+	}
+}
+```
+resolveDependency()方法中经过一顿操作，最终又会来到上面的getBean()方法(递归处理)  
+其中resolveDependency()方法内部会调用doResolveDependency(descriptor, requestingBeanName, autowiredBeanNames, typeConverter),在这一方法内部完成了依赖注入更底层的逻辑.这里就不再继续深挖了.
+
+
+####	三.1.3	调用各初始化方法,exposedObject = initializeBean(beanName, exposedObject, mbd);
+
+```
+protected Object initializeBean(final String beanName, final Object bean, @Nullable RootBeanDefinition mbd) {
+	if (System.getSecurityManager() != null) {
+		AccessController.doPrivileged((PrivilegedAction<Object>) () -> {
+			invokeAwareMethods(beanName, bean);
+			return null;
+		}, getAccessControlContext());
+	}
+	else {
+		//在调用Bean的初始化方法之前,调用一系列的aware接口实现,把相关的BeanName,BeanClassLoader,以及BeanFactory注入到Bean中去
+		invokeAwareMethods(beanName, bean);
+	}
+	Object wrappedBean = bean;
+	if (mbd == null || !mbd.isSynthetic()) {
+		// 这些都是钩子方法,在反复的调用,给Spring带来了极大的可拓展性
+		// 初始化之前调用BeanPostProcessor
+		wrappedBean = applyBeanPostProcessorsBeforeInitialization(wrappedBean, beanName);
+	}
+	try {
+		// 调用指定的init-method方法
+		invokeInitMethods(beanName, wrappedBean, mbd);
+	}
+	catch (Throwable ex) {
+		throw new BeanCreationException(
+				(mbd != null ? mbd.getResourceDescription() : null),
+				beanName, "Invocation of init method failed", ex);
+	}
+	if (mbd == null || !mbd.isSynthetic()) {
+		// 这些都是钩子方法,在反复的调用,给Spring带来了极大的可拓展性
+		// 初始化之后调用BeanPostProcessor
+		wrappedBean = applyBeanPostProcessorsAfterInitialization(wrappedBean, beanName);
+	}
+	return wrappedBean;
+}
+```
+
+在跟进invokeInitMethods方法内部看下:
+
+```
+protected void invokeInitMethods(String beanName, final Object bean, @Nullable RootBeanDefinition mbd)
+		throws Throwable {
+	// 除了使用init-method指定的初始化方法,还可以让bean实现InitializingBean接口重写afterPropertiesSet()方法
+	boolean isInitializingBean = (bean instanceof InitializingBean);
+	if (isInitializingBean && (mbd == null || !mbd.isExternallyManagedInitMethod("afterPropertiesSet"))) {
+		if (logger.isTraceEnabled()) {
+			logger.trace("Invoking afterPropertiesSet() on bean with name '" + beanName + "'");
+		}
+		if (System.getSecurityManager() != null) {
+			try {
+				AccessController.doPrivileged((PrivilegedExceptionAction<Object>) () -> {
+					((InitializingBean) bean).afterPropertiesSet();
+					return null;
+				}, getAccessControlContext());
+			}
+			catch (PrivilegedActionException pae) {
+				throw pae.getException();
+			}
+		}
+		else {
+			// 执行afterPropertiesSet()方法进行初始化
+			((InitializingBean) bean).afterPropertiesSet();
+		}
+	}
+	// 先执行afterPropertiesSet()方法,再进行init-method
+	if (mbd != null && bean.getClass() != NullBean.class) {
+		String initMethodName = mbd.getInitMethodName();
+		if (StringUtils.hasLength(initMethodName) &&
+				!(isInitializingBean && "afterPropertiesSet".equals(initMethodName)) &&
+				!mbd.isExternallyManagedInitMethod(initMethodName)) {
+			invokeCustomInitMethod(beanName, bean, mbd);
+		}
+	}
+}
+```
+
+该方法中首先判断Bean是否配置了init-method方法,如果有,那么通过invokeCustomInitMethod()方法来直接调用.其中在invokeCustomInitMethod()方法中是通过JDK的反射机制得到method对象,然后调用的init-method.最终完成Bean的初始化.
+
+
+
+到这里,bean创建,依赖注入和初始化方法完成
