@@ -165,14 +165,14 @@ protected void prepareBeanFactory(ConfigurableListableBeanFactory beanFactory) {
 
 IoC容器的BeanDefinition解析注册过程包括三个步骤,在invokeBeanFactoryPostProcessors()方法中完成了这三个步骤.先来对这三个步骤进行一下总结
 
-###	第一步:Resource定位
+###	4.1	第一步:Resource定位
 
-在SpringBoot中,我们都知道他的包扫描是从主类所在的包开始扫描的,prepareContext()方法中,会先将主类解析成BeanDefinition,然后在refresh()方法的invokeBeanFactoryPostProcessors()方法中解析主类的BeanDefinition获取basePackage的路径.这样就完成了定位的过程.其次SpringBoot的各种starter是通过SPI扩展机制实现的自动装配,SpringBoot的自动装配同样也是在invokeBeanFactoryPostProcessors()方法中实现的.还有一种情况,在SpringBoot中有很多的@EnableXXX注解,细心点进去看的应该就知道其底层是@Import注解,在invokeBeanFactoryPostProcessors()方法中也实现了对该注解指定的配置类的定位加载.  
+在SpringBoot中,我们都知道他的包扫描是从主类所在的包开始扫描的,refresh()方法的prepareContext()方法中,会先将主类解析成BeanDefinition,然后在refresh()方法的invokeBeanFactoryPostProcessors()方法中解析主类的BeanDefinition获取basePackage的路径.这样就完成了定位的过程.其次SpringBoot的各种starter是通过SPI扩展机制实现的自动装配,SpringBoot的自动装配同样也是在invokeBeanFactoryPostProcessors()方法中实现的.还有一种情况,在SpringBoot中有很多的@EnableXXX注解,细心点进去看的应该就知道其底层是@Import注解,在invokeBeanFactoryPostProcessors()方法中也实现了对该注解指定的配置类的定位加载.  
 prepareContext()方法在上一篇文章中讲过.
 
 常规的在SpringBoot中有三种实现定位,第一个是主类所在包的,第二个是SPI扩展机制实现的自动装配（比如各种starter）,第三种就是@Import注解指定的类.(对于非常规的不说了)
 
-###	第二步:BeanDefinition的解析载入
+###	4.2	第二步:BeanDefinition的解析载入
 
 在Resource定位后,紧接着就是BeanDefinition的解析载入.所谓解析载入就是通过上面定位得到的basePackage,SpringBoot会将该路径拼接成:classpath\*:org/springframework/boot/demo/\*\*/\*.class这样的形式,然后一个叫做PathMatchingResourcePatternResolver的类会将该路径下所有的.class文件都加载进来,然后遍历判断是不是有@Component注解,如果有的话,就是需要装载的BeanDefinition.载入的大致过程即是如此.
 
@@ -181,12 +181,12 @@ TIPS:
 @Configuration,@Controller,@Service等注解底层都是@Component注解,只不过包装了一层罢了.
 ``
 
-###	第三步:注册BeanDefinition
+###	4.3	第三步:注册BeanDefinition
 
 这个过程通过调用BeanDefinitionRegister接口的实现来完成.这个注册过程把载入过程中解析得到的BeanDefinition向IoC容器进行注册.在IoC容器中将BeanDefinition注入到一个ConcurrentHashMap中,IoC容器就是通过这个HashMap来持有这些BeanDefinition数据的.比如DefaultListableBeanFactory中的beanDefinitionMap属性.
 
 
-###	BeanDefinition解析载入和注册的源码过程详述
+###	4.4	BeanDefinition解析载入和注册的源码过程详述
 
 BeanDefinition解析载入和注册过程主要在AbstractApplicationContext的refresh方法中invokeBeanFactoryPostProcessors(beanFactory)方法逻辑中实现.
 
@@ -332,7 +332,7 @@ public static void invokeBeanFactoryPostProcessors(
 当前一部分BeanDefinitionRegistryPostProcessor执行完成后,清空currentRegistryProcessors,然后再获取下一部分BeanDefinitionRegistryPostProcessor来执行处理.  
 因此BeanDefinitionRegistryPostProcessor的执行是有优先级先后顺序的.
 
-**<font color="red">这里最重要的一个BeanDefinitionRegistryPostProcessor是ConfigurationClassPostProcessor,它实现了PriorityOrdered,是最优先执行的一个BeanDefinitionRegistryPostProcessor.ConfigurationClassPostProcessor中完成了BeanDefinition的扫描解析和注册工作.</font>**
+**<font color="red">这里最重要的一个BeanDefinitionRegistryPostProcessor是ConfigurationClassPostProcessor,它实现了PriorityOrdered,是优先执行的一个BeanDefinitionRegistryPostProcessor.ConfigurationClassPostProcessor中完成了BeanDefinition的扫描解析和注册工作.</font>**
 
 c.
 ```

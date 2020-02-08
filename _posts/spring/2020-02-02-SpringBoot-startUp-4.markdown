@@ -87,7 +87,7 @@ public void refresh() throws BeansException, IllegalStateException {
 
 其中最重要也是最常见的两个BeanPostProcessor即是:
 
-*	AutowiredAnnotationBeanPostProcessor,   对@Autowired注解进行处理的(当然还包括一些其他注解的处理)
+*	AutowiredAnnotationBeanPostProcessor,   对@Autowired注解进行处理的
 *	CommonAnnotationBeanPostProcessor,	对@Resource注解进行处理(当然还包括一些其他注解的处理)
 
 他们的处理逻辑类似,主要就是将Bean中符合条件(需要进行依赖注入)的属性获取到,然后将这些信息合并到BeanDefinition中,以便于后面进行依赖注入.
@@ -116,8 +116,70 @@ public AnnotatedBeanDefinitionReader(BeanDefinitionRegistry registry, Environmen
 }
 ```
 
-可以看到AnnotationConfigUtils.registerAnnotationConfigProcessors(this.registry);这行方法调用.  
-也就是在这个方法内部,注册了这两个重要的BeanPostProcessor的BeanDefinition,以便于后面根据BeanDefinition来生成这两个Bean.
+跟进AnnotationConfigUtils.registerAnnotationConfigProcessors(this.registry);方法
+
+```
+public static Set<BeanDefinitionHolder> registerAnnotationConfigProcessors(
+		BeanDefinitionRegistry registry, @Nullable Object source) {
+	DefaultListableBeanFactory beanFactory = unwrapDefaultListableBeanFactory(registry);
+	if (beanFactory != null) {
+		if (!(beanFactory.getDependencyComparator() instanceof AnnotationAwareOrderComparator)) {
+			beanFactory.setDependencyComparator(AnnotationAwareOrderComparator.INSTANCE);
+		}
+		if (!(beanFactory.getAutowireCandidateResolver() instanceof ContextAnnotationAutowireCandidateResolver)) {
+			beanFactory.setAutowireCandidateResolver(new ContextAnnotationAutowireCandidateResolver());
+		}
+	}
+	Set<BeanDefinitionHolder> beanDefs = new LinkedHashSet<>(8);
+	if (!registry.containsBeanDefinition(CONFIGURATION_ANNOTATION_PROCESSOR_BEAN_NAME)) {
+		RootBeanDefinition def = new RootBeanDefinition(ConfigurationClassPostProcessor.class);
+		def.setSource(source);
+		beanDefs.add(registerPostProcessor(registry, def, CONFIGURATION_ANNOTATION_PROCESSOR_BEAN_NAME));
+	}
+	if (!registry.containsBeanDefinition(AUTOWIRED_ANNOTATION_PROCESSOR_BEAN_NAME)) {
+		RootBeanDefinition def = new RootBeanDefinition(AutowiredAnnotationBeanPostProcessor.class);
+		def.setSource(source);
+		beanDefs.add(registerPostProcessor(registry, def, AUTOWIRED_ANNOTATION_PROCESSOR_BEAN_NAME));
+	}
+	// Check for JSR-250 support, and if present add the CommonAnnotationBeanPostProcessor.
+	if (jsr250Present && !registry.containsBeanDefinition(COMMON_ANNOTATION_PROCESSOR_BEAN_NAME)) {
+		RootBeanDefinition def = new RootBeanDefinition(CommonAnnotationBeanPostProcessor.class);
+		def.setSource(source);
+		beanDefs.add(registerPostProcessor(registry, def, COMMON_ANNOTATION_PROCESSOR_BEAN_NAME));
+	}
+	// Check for JPA support, and if present add the PersistenceAnnotationBeanPostProcessor.
+	if (jpaPresent && !registry.containsBeanDefinition(PERSISTENCE_ANNOTATION_PROCESSOR_BEAN_NAME)) {
+		RootBeanDefinition def = new RootBeanDefinition();
+		try {
+			def.setBeanClass(ClassUtils.forName(PERSISTENCE_ANNOTATION_PROCESSOR_CLASS_NAME,
+					AnnotationConfigUtils.class.getClassLoader()));
+		}
+		catch (ClassNotFoundException ex) {
+			throw new IllegalStateException(
+					"Cannot load optional framework class: " + PERSISTENCE_ANNOTATION_PROCESSOR_CLASS_NAME, ex);
+		}
+		def.setSource(source);
+		beanDefs.add(registerPostProcessor(registry, def, PERSISTENCE_ANNOTATION_PROCESSOR_BEAN_NAME));
+	}
+	if (!registry.containsBeanDefinition(EVENT_LISTENER_PROCESSOR_BEAN_NAME)) {
+		RootBeanDefinition def = new RootBeanDefinition(EventListenerMethodProcessor.class);
+		def.setSource(source);
+		beanDefs.add(registerPostProcessor(registry, def, EVENT_LISTENER_PROCESSOR_BEAN_NAME));
+	}
+	if (!registry.containsBeanDefinition(EVENT_LISTENER_FACTORY_BEAN_NAME)) {
+		RootBeanDefinition def = new RootBeanDefinition(DefaultEventListenerFactory.class);
+		def.setSource(source);
+		beanDefs.add(registerPostProcessor(registry, def, EVENT_LISTENER_FACTORY_BEAN_NAME));
+	}
+	return beanDefs;
+}
+```
+
+这里有几个关键点:  
+
+*	设置beanFactory,也就是DefaultListableBeanFactory的autowireCandidateResolver为ContextAnnotationAutowireCandidateResolver(它是QualifierAnnotationAutowireCandidateResolver的子类,在QualifierAnnotationAutowireCandidateResolver父类中,有负责@Qualifier和@Value两个注解的处理的逻辑)
+*	注册了AutowiredAnnotationBeanPostProcessor的BeanDefinition,以便于后面根据BeanDefinition来生成这两个Bean.
+*	注册了CommonAnnotationBeanPostProcessor的BeanDefinition,以便于后面根据BeanDefinition来生成这两个Bean.
 
 
 ##	二.	finishBeanFactoryInitialization(beanFactory);
@@ -1062,7 +1124,24 @@ protected void inject(Object bean, @Nullable String beanName, @Nullable Property
 }
 ```
 resolveDependency()方法中经过一顿操作，最终又会来到上面的getBean()方法(递归处理)  
-其中resolveDependency()方法内部会调用doResolveDependency(descriptor, requestingBeanName, autowiredBeanNames, typeConverter),在这一方法内部完成了依赖注入更底层的逻辑.这里就不再继续深挖了.
+其中resolveDependency()方法内部会调用doResolveDependency(descriptor, requestingBeanName, autowiredBeanNames, typeConverter),在这一方法内部完成了依赖注入更底层的逻辑.
+
+doResolveDependency方法这里就不再继续深挖了,但有一段代码需要提出来说明一下:
+
+```
+if (value instanceof String) {
+	String strVal = resolveEmbeddedValue((String) value);
+	BeanDefinition bd = (beanName != null && containsBean(beanName) ?
+			getMergedBeanDefinition(beanName) : null);
+	value = evaluateBeanDefinitionString(strVal, bd);
+}
+```
+在Object value = getAutowireCandidateResolver().getSuggestedValue(descriptor);代码处    
+由前面一.处的分析,此处getAutowireCandidateResolver()获取到的是ContextAnnotationAutowireCandidateResolver.  
+所以当一个属性有@Value注解标注的时候,在这里会被获取到,但这时获取到的value值是类似"${XXXX.xxxxx}"这样的还未进行替换的字符串.  
+然后经过后面String strVal = resolveEmbeddedValue((String) value);这行获取到配置文件设置的具体值.  
+然后后面的两行代码做的就是:获取到对应的BeanDefinition,将其对应信息修改,也就是属性值替换为配置文件中设置的值.
+
 
 
 ####	三.1.3	调用各初始化方法,exposedObject = initializeBean(beanName, exposedObject, mbd);
