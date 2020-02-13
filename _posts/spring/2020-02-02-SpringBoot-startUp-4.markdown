@@ -284,10 +284,10 @@ protected <T> T doGetBean(final String name, @Nullable final Class<T> requiredTy
 	Object bean;
 
 	// 1.检查缓存中或者实例工厂中是否有对应的实例
-    // 因为在创建单例bean的时候会存在依赖注入的情况，而在创建依赖的时候为了避免循环依赖
-    // Spring在创建bean的时候不会等bean创建完成就会将bean的ObjectFactory提早曝光
-    // 也就是将ObjectFactory加入到缓存中，一旦下一个要创建的bean需要依赖上个bean则直接使用ObjectFactory
-    // 2.spring 默认是单例的，如果能获取到直接返回，提高效率。
+	// 因为在创建单例bean的时候会存在依赖注入的情况，而在创建依赖的时候为了避免循环依赖
+	// Spring在创建bean的时候不会等bean创建完成就会将bean的ObjectFactory提早曝光
+	// 也就是将ObjectFactory加入到缓存中，一旦下一个要创建的bean需要依赖上个bean则直接使用ObjectFactory
+	// 2.spring 默认是单例的，如果能获取到直接返回，提高效率。
 	// Eagerly check singleton cache for manually registered singletons.
 	Object sharedInstance = getSingleton(beanName);
 	if (sharedInstance != null && args == null) {
