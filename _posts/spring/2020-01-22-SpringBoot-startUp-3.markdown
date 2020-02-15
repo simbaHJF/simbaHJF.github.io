@@ -461,7 +461,7 @@ public void processConfigBeanDefinitions(BeanDefinitionRegistry registry) {
 这里debug进来,发现candidates中只有一个类,就是我们的主类:
 ![1VCfne.png](https://s2.ax1x.com/2020/01/23/1VCfne.png)
 
-跟进do{}whie()循环
+跟进do{}whie()循环中的parse方法
 
 f.
 
@@ -495,7 +495,8 @@ public void parse(Set<BeanDefinitionHolder> configCandidates) {
 debug进来,会进入到第一个条件判断分支,因为主类的@SpringBootApplication注解其实内部引入了@Component注解
 ![1VPeE9.png](https://s2.ax1x.com/2020/01/23/1VPeE9.png)
 
-然后跟进parse方法.
+然后跟进parse方法内部,会调用processConfigurationClass方法.
+
 ```
 protected void processConfigurationClass(ConfigurationClass configClass) throws IOException {
 	if (this.conditionEvaluator.shouldSkip(configClass.getMetadata(), ConfigurationPhase.PARSE_CONFIGURATION)) {
