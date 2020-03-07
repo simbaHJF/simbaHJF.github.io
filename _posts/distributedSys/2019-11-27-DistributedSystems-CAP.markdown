@@ -5,7 +5,7 @@ date:       2019-11-27 16:30:00 +0800
 author:     "simba"
 header-img: "img/post-bg-miui6.jpg"
 tags:
-    - JAVA
+    - 分布式
 
 ---
 
