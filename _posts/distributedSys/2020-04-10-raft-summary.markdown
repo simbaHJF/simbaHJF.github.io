@@ -11,7 +11,7 @@ tags:
 
 
 
-#	Raft基本
+#	5.1 Raft基本
 
 一个Raft集群包含多个server节点,通常是5,这样一来,能够容错两台server的宕机情况.
 
@@ -40,10 +40,13 @@ Raft的server之间通信使用的是远程过程调用(RPCs),在这个基础共
 
 如果server节点没有及时收到响应,则会重试RPC,并且server节点时并行发出RPC请求的,以此来获得最佳性能.
 
+Raft属性:
+![GbSLR0.png](https://s1.ax1x.com/2020/04/11/GbSLR0.png)
+
 <br><br>
 
 
-#	Leader选举
+#	5.2 Leader选举
 
 Raft采用心跳机制来触发leader选举.当server启动的时候,他们最初是follower状态.只要一个server能持续收到来自leader或者是candidate的合法RPCs,那么它就保持follower状态.
 
@@ -76,5 +79,32 @@ term示意图:
 ![GHWiod.png](https://s1.ax1x.com/2020/04/11/GHWiod.png)
 
 
-#	日志复制
 
+#	5.3 日志复制
+
+一旦leader被选定了,它就开始为client请求服务.每一个client请求包含一个将被复制状态机运行的command.leader将这个command作为一个新的entry追加到自己的log中,然后并行向其他每一个server节点发出AppendEntries RPCs来执行entry复制.当entry已经被安全复制了,leader会将这个entry应用到它自己的状态机中,然后向client返回执行结果.如果followers宕机或者运行缓慢,或者发生网络丢包,leader会无限重试AppendEntries RPCs,直到所有的followers都最终存储了所有的log entry.
+
+log示意图:
+![GHIiG9.png](https://s1.ax1x.com/2020/04/11/GHIiG9.png)
+
+每一个log entry都会存储一个状态机command和term.log entry中的term号用于发现不同log之间的不一致性和确保其他一些特性.每一个log entry还有一个整数型的索引用于确认其在log中的位置.
+
+leader会决定什么时候将一个log entry应用到状态机中是安全的,这样的entry被叫做committed.Raft保证committed entries是持久化的并且最终会被所有的可用状态机执行.当创建这个entry的leader已经将它复制到多数server中,这时,这个log entry就被提交了(committed).这还将提交leader日志中的所有先前entry,包括先前领导者创建的entry.leader记录被提交的最高索引号,并在以后的AppendEntries RPC(包括heartbeats)中包含该索引,以便其他server获取.一旦一个follower了解到一个log entry被提交了,它就会将该log entry应用到它的本地状态机(按日志顺序).
+
+设计Raft日志机制是为了保持不同服务器上日志之间的高度一致性.这不仅简化了系统行为,保证了它更加可预测,而且也是确保安全性的重要组成部分.Raft维护如下两个特性,它们一起构成了Raft的Raft中的Log Matching Property(日志匹配属性,Figure 3):
+*	如果不同日志中的两个entry有相同的index和term,那么他们存储着相同的command.
+*	如果不同日志中的两个entry有相同的index和term,他们这些不同的日志在该entry之前的所有entry是完全相同的.
+
+第一个属性源于这样一个事实:一个leader在给定log索引和term下,最多只会创建一个entry,并且这个log entry永远不会更改它们在日志中的位置.  
+第二个属性是由AppendEntries所执行的一个一致性检查来保证的.当发送一个AppendEntries Rpc的时候,leader将log中紧邻此entry的上一个entry的index和term包含在这个RPC请求中,如果follower在自己的log没有找到与RPC请求中包含的index和term有着相同信息的entry,那么follower会拒绝这个新的entry.
+
+这个一致性检查是通过归纳法生效的:log的初始空状态是满足Log Matching Property的,然后这个一致性检查在log扩展的时候来保持Log Matching Property.因此,只要AppendEntries返回成功,leader就会知道:follower中,截止到这个最新发送过去的entry之前,其log与自己的是完全相同的.
+
+在正常运行过程中,leader和followers的log是保持一致的,所以AppendEntries的一致性检查一直都不会失败.但是,leader宕机会导致不一致性(老的leader还没有将其日志中的所有entry都做完复制).这些不一致可能会导致一系列的leader和follower崩溃.
+
+下图描述了一些导致followers和leader不一致的情况:
+![GbMmgU.png](https://s1.ax1x.com/2020/04/11/GbMmgU.png)
+
+follower可能会缺少leader中出现的entry,可能会包含leader中没有出现的entry,或者前面两种情况都有.日志中缺少的和无关的条目可能跨越多个term.
+
+在Raft中,leader强制follower复制leader的log来解决不一致问题.这意味着follower中的冲突entry将会被leader的log中entry所覆盖.在后面的5.4部分,会说明:在此基础之上,再增加一些限制,就能保证这种操作是安全的.
