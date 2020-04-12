@@ -78,6 +78,7 @@ Raft采用随机election timeout来保证分裂投票的情况极少出现并且
 term示意图:
 ![GHWiod.png](https://s1.ax1x.com/2020/04/11/GHWiod.png)
 
+<br><br>
 
 
 #	5.3 日志复制
@@ -109,4 +110,13 @@ follower可能会缺少leader中出现的entry,可能会包含leader中没有出
 
 在Raft中,leader强制follower复制leader的log来解决不一致问题.这意味着follower中的冲突entry将会被leader的log中entry所覆盖.在后面的5.4部分,会说明:在此基础之上,再增加一些限制,就能保证这种操作是安全的.
 
-leader为了让follower的log变为与自己的一致,leader必须找到与follower中的log保持一致的最后一个entry,记为一个点,然后删除follower的log中这个点之后的所有entry,然后将leader自己的log中这个点之后的所有entry发送给follower.
+leader为了让follower的log变为与自己的一致,leader必须找到与follower中的log保持一致的最后一个entry,记为一个点,然后删除follower的log中这个点之后的所有entry,然后将leader自己的log中这个点之后的所有entry发送给follower.所有的这些行为都是发生在AppendEntries RPCs所执行的一致性检查的响应中.leader会为每一个follower维护一个nextIndex,这个索引指向leader将要向某个follower发送的下一个log entry.当一个leader第一次掌权时,它会初始化所有的nextIndex为该leader当前log中最后一个entry的下一个.如果某个follower的log与leader的不一致,AppendEntries的一致性检查机制会使下一次AppendEntries RPC失败.在拒绝之后,leader减小nextIndex,然后重试AppendEntries RPC.最终nextIndex将会到达一个一个点,在这个点上,leader和follower的log是匹配的.此时,AppendEntries就会成功了,这样就移除了follower的log中有冲突的entry并且向log中追加写入了leader中的log entry.一旦AppendEntries成功了,follower的log就与leader中的一致了,并且它会在该term的余下时间内保持这种一致性.
+
+如果需要,可以对这个协议进行优化以减少AppendEntries RPCs被拒绝的次数.例如,当拒绝一个AppendEntries请求的时候,follower可以反馈冲突entry的term和该term下它存储的第一个entry.通过这个信息,leader能够以绕开该term下的所有冲突entry的方式来减小nextIndex值;对于冲突的这些entry,每一个term只需要一次AppendEntries RPCs,而不是每个冲突entry一次AppendEntries RPCs.在实践中,我们怀疑这种优化是否有必要,因为失败很少发生并且冲突entry不会有很多.
+
+通过这个机制,当一个leader掌权时,它不需要为恢复日志一致性做任何特殊动作.它只是开始正常运转,log会通过响应AppendEntries的一致性检查机制而自动完成聚合.一个leader是绝对不会重写或者是删除自己log中的entry的(Raft属性中的Leader Append-Only Property).
+
+<br><br>
+
+
+#	5.4	安全性
