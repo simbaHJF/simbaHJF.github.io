@@ -134,9 +134,10 @@ Raft通过比较最后一个entry的index和term来判断哪个log更新.如果�
 ###	5.4.2	从先前的term提交entry
 
 如5.3中描述的,当一个entry被多数节点存储了,那么它可以被提交.如果leader在他提交entry之前宕机,下任leader将尝试完成这个entry的复制.但是,leader不能立即得出如下结论:一旦上一个term中的某个entry被多数节点存储了,就认为它已被提交.
-下图Figure-8说明了这样一种情况:一个老的entry多数节点存储了,但是仍然被下任leader所覆写.
+下图Figure-8说明了这样一种情况:一个老的entry被多数节点存储了,但是仍然被下任leader所覆写.
 ![Jp3bBd.png](https://s1.ax1x.com/2020/04/14/Jp3bBd.png)
 
-为了消除Figure-8中的类似问题,Raft从不通过计数副本数来提交先前term的log entry.只有来自于当前leader,当前term下的log entry才通过计数副本数来提交;一旦以这种方式提交了来自当前term的entry,由于Log Matching Property,将间接提交所有先前的entry.这里有一些情况下,leader能够安全的得出结论:一个老的log entry已经被提交了(例如,这个entry已经被每一个节点存储了),但是,Raft仍然使用一种更为保守方式来保持简单性.
+为了消除Figure-8中的类似问题,Raft从不通过计数副本数来提交先前term的log entry.只有来自于当前leader,当前term下的log entry才通过计数副本数来提交;一旦以这种方式提交了来自当前term的entry,由于Log Matching Property,将间接提交所有先前的entry.这里有一些情况下,leader能够安全的得出结论:一个老的log entry已经被提交了(例如,这个entry已经被每一个节点存储了),但是,Raft仍然使用这种更为保守方式来保持简单性(**<font color="red">指的是Log Matching Property,以及前文所讲的日志复制,冲突时leader强制follower进行log entry的overwrite以使得和leader保持一致.也就是说,Figure-8
+中的c,S1将不会再复制term2给S3,另外,即使在b阶段S1将term复制给了S2,S3,但是在提交前宕机了,到d时,index2的位置还是会被term3覆写.</font>**).
 
 Raft引入了这种复杂性的原因是:当一个leader复制先前term下的entry时,log entry将保留其原有term编号.在其他的共识算法中,如果一个新的leader复制先前term下的entry,它会用一个新的term号来标记这个entry.Raft的方法使得log entry的推理变得容易,因为它的entry的term保持不变.此外,新的leader发送的先前term下的entry很少(其他算法在重新提交这些entry之前,必须发送冗余的log entry来对他们进行重编号)
