@@ -1,7 +1,7 @@
 ---
 layout:     post
 title:      "linux--process management"
-date:       2020-04-24 18:00:00 +0800
+date:       2020-05-17 18:00:00 +0800
 author:     "simba"
 header-img: "img/post-bg-miui6.jpg"
 tags:
