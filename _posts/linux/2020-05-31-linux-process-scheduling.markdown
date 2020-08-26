@@ -149,7 +149,7 @@ CFS不再有时间片的概念,但是它也必须维护每个进程运行的时�
 唤醒操作通过函数wake_up()进行,它会唤醒指定的等待队列上的所有进程.它调用函数try_to_wake_up(),该函数负责将进程设置为TASK_RUNNING状态,调用enqueue_task()将此进程放入红黑树(可执行队列)中,如果被唤醒的进程优先级比当前正在执行的进程的优先级高,还要设置need_resched标志.通常,哪段代码促使等待条件达成,他就要负责随后调用wake_up()函数.例如,当磁盘数据到来时,VFS就要负责对等待队列调用wake_up(),以便唤醒队列中等待这些数据的进程.
 
 下图描述了每个调度程序状态之间的关系:
-**<font color="red">对下图说明一点,放入等待队列后,把任务状态设置为TASK_INTERRUPTIBLE或TASK_UNINTERRUPTIBLE</font>**
+**<font color="red">对下图修改一点,我觉得图里写漏掉了,放入等待队列后,把任务状态设置为TASK_INTERRUPTIBLE或TASK_UNINTERRUPTIBLE</font>**
 ![YCY7uQ.png](https://s1.ax1x.com/2020/05/04/YCY7uQ.png)
 
 
@@ -190,7 +190,7 @@ CFS不再有时间片的概念,但是它也必须维护每个进程运行的时�
 
 #	实时调度策略
 
-linux提供了两种实时调度策略:SCHED_FIFO和SCHED_RR.而普通的,非实时的调度策略是SCHED_NORMAL.借助调度类的框架,这些实时策略并不被完全公平调度器来管理,而是被一个特殊的实时调度器管理.
+linux提供了两种实时调度策略:SCHED_FIFO和SCHED_RR.而普通的,非实时的调度策略是SCHED_NORMAL.借助调度类的框架,这些实时策略并不被完全公平调度器CFS来管理,而是被一个特殊的实时调度器管理.
 
 SCHED_FIFO实现了一种简单的,先入先出的调度算法,它不使用时间片.处于可运行状态的SCHED_FIFO级的进程会比任何SCHED_NORMAL级的进程都先得到调度.
 
