@@ -588,10 +588,9 @@ private String getConfigInner(String tenant, String dataId, String group, long t
 跟进configService.addListener内部代码实现:
 
 ```
-public void addTenantListeners(String dataId, String group, List<? extends Listener> listeners) throws NacosException {
-    // 如果group为null,将其转化为DEFAULT_GROUP
+public void addTenantListeners(String dataId, String group, List<? extends Listener> listeners)
+        throws NacosException {
     group = null2defaultGroup(group);
-    // 获取tenant租户
     String tenant = agent.getTenant();
     CacheData cache = addCacheDataIfAbsent(dataId, group, tenant);
     for (Listener listener : listeners) {
