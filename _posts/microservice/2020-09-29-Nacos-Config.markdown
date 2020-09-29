@@ -671,7 +671,7 @@ public CacheData(ConfigFilterChainManager configFilterChainManager, String name,
 
 这里关注两个点:
 *   this.content = loadCacheContentFromDiskLocal(name, dataId, group, tenant);  
-    这里构造CacheData时,会首先尝试从本地存储的snapshot配置文件中尝试获取对用配置的内容
+    这里构造CacheData时,会首先尝试从本地存储的snapshot配置文件中尝试获取对应配置的内容
 *   this.md5 = getMd5String(content);  
     对content做md5,用于后面对比配置是否被改变.
 
