@@ -1,7 +1,7 @@
 ---
 layout:     post
 title:      "Nacos配置中心原理----client端"
-date:       2020-02-17 00:00:00 +0800
+date:       2020-09-29 00:00:00 +0800
 author:     "simba"
 header-img: "img/post-bg-miui6.jpg"
 tags:
@@ -10,10 +10,10 @@ tags:
 ---
 
 
-> <font color="red"> nacos版本:	1.1.4 </font>
+> <font color="red"> nacos版本:	1.3.2 </font>
 
 
-本文对Nacos配置中心客户端原理进行分析,以nacos官方文档,java SDK的方式为基础,至于与springboot集成的注解引入方式,会在后面文章中分析.
+本文对Nacos配置中心客户端原理进行分析,以nacos官方文档,java SDK的方式为基础.
 
 
 先看下官方文档给出的示例代码:
@@ -84,16 +84,18 @@ public static ConfigService createConfigService(Properties properties) throws Na
 
 ```
 public NacosConfigService(Properties properties) throws NacosException {
+    ValidatorUtils.checkInitParam(properties);
     String encodeTmp = properties.getProperty(PropertyKeyConst.ENCODE);
     if (StringUtils.isBlank(encodeTmp)) {
-        encode = Constants.ENCODE;
+        this.encode = Constants.ENCODE;
     } else {
-        encode = encodeTmp.trim();
+        this.encode = encodeTmp.trim();
     }
     initNamespace(properties);
-    agent = new MetricsHttpAgent(new ServerHttpAgent(properties));
-    agent.start();
-    worker = new ClientWorker(agent, configFilterChainManager, properties);
+    
+    this.agent = new MetricsHttpAgent(new ServerHttpAgent(properties));
+    this.agent.start();
+    this.worker = new ClientWorker(this.agent, this.configFilterChainManager, properties);
 }
 ```
 这里完成如下几件事:
@@ -121,42 +123,70 @@ HttpAgent抽象了各个http请求方法,是nacos config的client中一个http�
 ```
 public interface HttpAgent {
     /**
-     * start to get nacos ip list
+     * start to get nacos ip list.
      */
     void start() throws NacosException;
-
+    
     /**
-     * invoke http get method
+     * invoke http get method.
+     *
+     * @param path          http path
+     * @param headers       http headers
+     * @param paramValues   http paramValues http
+     * @param encoding      http encode
+     * @param readTimeoutMs http timeout
+     * @return HttpResult http response
+     * @throws Exception If an input or output exception occurred
      */
-    HttpResult httpGet(String path, List<String> headers, List<String> paramValues, String encoding, long readTimeoutMs) throws IOException;
-
+    
+    HttpRestResult<String> httpGet(String path, Map<String, String> headers, Map<String, String> paramValues,
+            String encoding, long readTimeoutMs) throws Exception;
+    
     /**
-     * invoke http post method
+     * invoke http post method.
+     *
+     * @param path          http path
+     * @param headers       http headers
+     * @param paramValues   http paramValues http
+     * @param encoding      http encode
+     * @param readTimeoutMs http timeout
+     * @return HttpResult http response
+     * @throws Exception If an input or output exception occurred
      */
-    HttpResult httpPost(String path, List<String> headers, List<String> paramValues, String encoding, long readTimeoutMs) throws IOException;
-
+    HttpRestResult<String> httpPost(String path, Map<String, String> headers, Map<String, String> paramValues,
+            String encoding, long readTimeoutMs) throws Exception;
+    
     /**
-     * invoke http delete method
+     * invoke http delete method.
+     *
+     * @param path          http path
+     * @param headers       http headers
+     * @param paramValues   http paramValues http
+     * @param encoding      http encode
+     * @param readTimeoutMs http timeout
+     * @return HttpResult http response
+     * @throws Exception If an input or output exception occurred
      */
-    HttpResult httpDelete(String path, List<String> headers, List<String> paramValues, String encoding, long readTimeoutMs) throws IOException;
-
+    HttpRestResult<String> httpDelete(String path, Map<String, String> headers, Map<String, String> paramValues,
+            String encoding, long readTimeoutMs) throws Exception;
+    
     /**
-     * get name
+     * get name.
      */
     String getName();
-
+    
     /**
-     * get namespace
+     * get namespace.
      */
     String getNamespace();
-
+    
     /**
-     * get tenant
+     * get tenant.
      */
     String getTenant();
-
+    
     /**
-     * get encode
+     * get encode.
      */
     String getEncode();
 }
@@ -174,24 +204,47 @@ public MetricsHttpAgent(HttpAgent httpAgent) {
 那么再看一下ServerHttpAgent的构造方法:
 ```
 public ServerHttpAgent(Properties properties) throws NacosException {
-    serverListMgr = new ServerListManager(properties);
+    this.serverListMgr = new ServerListManager(properties);
+    this.securityProxy = new SecurityProxy(properties, NACOS_RESTTEMPLATE);
+    this.namespaceId = properties.getProperty(PropertyKeyConst.NAMESPACE);
     init(properties);
+    this.securityProxy.login(this.serverListMgr.getServerUrls());
+    
+    // init executorService
+    this.executorService = new ScheduledThreadPoolExecutor(1, new ThreadFactory() {
+        @Override
+        public Thread newThread(Runnable r) {
+            Thread t = new Thread(r);
+            t.setName("com.alibaba.nacos.client.config.security.updater");
+            t.setDaemon(true);
+            return t;
+        }
+    });
+    
+    this.executorService.scheduleWithFixedDelay(new Runnable() {
+        @Override
+        public void run() {
+            securityProxy.login(serverListMgr.getServerUrls());
+        }
+    }, 0, this.securityInfoRefreshIntervalMills, TimeUnit.MILLISECONDS);
+    
 }
 ```
-这里主要就是创建一个ServerListManager,内部会初始化一些和nacos server地址相关的属性;  
+这里主要就是创建一个ServerListManager,内部会初始化一些和nacos server相关的属性;  
 init(properties)会初始化其他一些属性.  
 这里看一下ServerListManager的构造方法中做的事情:
 ```
 public ServerListManager(Properties properties) throws NacosException {
-    isStarted = false;
-    serverAddrsStr = properties.getProperty(PropertyKeyConst.SERVER_ADDR);
+    this.isStarted = false;
+    this.serverAddrsStr = properties.getProperty(PropertyKeyConst.SERVER_ADDR);
     String namespace = properties.getProperty(PropertyKeyConst.NAMESPACE);
     initParam(properties);
+    
     if (StringUtils.isNotEmpty(serverAddrsStr)) {
-        isFixed = true;
+        this.isFixed = true;
         List<String> serverAddrs = new ArrayList<String>();
-        String[] serverAddrsArr = serverAddrsStr.split(",");
-        for (String serverAddr: serverAddrsArr) {
+        String[] serverAddrsArr = this.serverAddrsStr.split(",");
+        for (String serverAddr : serverAddrsArr) {
             if (serverAddr.startsWith(HTTPS) || serverAddr.startsWith(HTTP)) {
                 serverAddrs.add(serverAddr);
             } else {
@@ -203,30 +256,33 @@ public ServerListManager(Properties properties) throws NacosException {
                 }
             }
         }
-        serverUrls = serverAddrs;
+        this.serverUrls = serverAddrs;
         if (StringUtils.isBlank(namespace)) {
-            name = FIXED_NAME + "-" + getFixedNameSuffix(serverUrls.toArray(new String[serverUrls.size()]));
+            this.name = FIXED_NAME + "-" + getFixedNameSuffix(
+                    this.serverUrls.toArray(new String[this.serverUrls.size()]));
         } else {
             this.namespace = namespace;
             this.tenant = namespace;
-            name = FIXED_NAME + "-" + getFixedNameSuffix(serverUrls.toArray(new String[serverUrls.size()])) + "-"
-                + namespace;
+            this.name = FIXED_NAME + "-" + getFixedNameSuffix(
+                    this.serverUrls.toArray(new String[this.serverUrls.size()])) + "-" + namespace;
         }
     } else {
         if (StringUtils.isBlank(endpoint)) {
             throw new NacosException(NacosException.CLIENT_INVALID_PARAM, "endpoint is blank");
         }
-        isFixed = false;
+        this.isFixed = false;
         if (StringUtils.isBlank(namespace)) {
-            name = endpoint;
-            addressServerUrl = String.format("http://%s:%d/%s/%s", endpoint, endpointPort, contentPath,
-                serverListName);
+            this.name = endpoint;
+            this.addressServerUrl = String
+                    .format("http://%s:%d/%s/%s", this.endpoint, this.endpointPort, this.contentPath,
+                            this.serverListName);
         } else {
             this.namespace = namespace;
             this.tenant = namespace;
-            name = endpoint + "-" + namespace;
-            addressServerUrl = String.format("http://%s:%d/%s/%s?namespace=%s", endpoint, endpointPort,
-                contentPath, serverListName, namespace);
+            this.name = this.endpoint + "-" + namespace;
+            this.addressServerUrl = String
+                    .format("http://%s:%d/%s/%s?namespace=%s", this.endpoint, this.endpointPort, this.contentPath,
+                            this.serverListName, namespace);
         }
     }
 }
@@ -264,9 +320,11 @@ public synchronized void start() throws NacosException {
 到这里我们看到,会调用前面初始化的ServerListManager的start方法:
 ```
 public synchronized void start() throws NacosException {
+    
     if (isStarted || isFixed) {
         return;
     }
+    
     GetServerListTask getServersTask = new GetServerListTask(addressServerUrl);
     for (int i = 0; i < initServerlistRetryTimes && serverUrls.isEmpty(); ++i) {
         getServersTask.run();
@@ -276,13 +334,16 @@ public synchronized void start() throws NacosException {
             LOGGER.warn("get serverlist fail,url: {}", addressServerUrl);
         }
     }
+    
     if (serverUrls.isEmpty()) {
         LOGGER.error("[init-serverlist] fail to get NACOS-server serverlist! env: {}, url: {}", name,
-            addressServerUrl);
+                addressServerUrl);
         throw new NacosException(NacosException.SERVER_ERROR,
-            "fail to get NACOS-server serverlist! env:" + name + ", not connnect url:" + addressServerUrl);
+                "fail to get NACOS-server serverlist! env:" + name + ", not connnect url:" + addressServerUrl);
     }
-    TimerService.scheduleWithFixedDelay(getServersTask, 0L, 30L, TimeUnit.SECONDS);
+    
+    // executor schedules the timer task
+    this.executorService.scheduleWithFixedDelay(getServersTask, 0L, 30L, TimeUnit.SECONDS);
     isStarted = true;
 }
 ```
@@ -301,46 +362,51 @@ public synchronized void start() throws NacosException {
 ####    一.2   &emsp;&emsp;  创建ClientWorker
 
 ```
-public ClientWorker(final HttpAgent agent, final ConfigFilterChainManager configFilterChainManager, final Properties properties) {
-    this.agent = agent;
-    this.configFilterChainManager = configFilterChainManager;
-    // Initialize the timeout parameter
-    init(properties);
-
-    executor = Executors.newScheduledThreadPool(1, new ThreadFactory() {
-        @Override
-        public Thread newThread(Runnable r) {
-            Thread t = new Thread(r);
-            t.setName("com.alibaba.nacos.client.Worker." + agent.getName());
-            t.setDaemon(true);
-            return t;
-        }
-    });
-
-    executorService = Executors.newScheduledThreadPool(Runtime.getRuntime().availableProcessors(), new ThreadFactory() {
-        @Override
-        public Thread newThread(Runnable r) {
-            Thread t = new Thread(r);
-            t.setName("com.alibaba.nacos.client.Worker.longPolling." + agent.getName());
-            t.setDaemon(true);
-            return t;
-        }
-    });
-
-    executor.scheduleWithFixedDelay(new Runnable() {
-        @Override
-        public void run() {
-            try {
-                checkConfigInfo();
-            } catch (Throwable e) {
-                LOGGER.error("[" + agent.getName() + "] [sub-check] rotate check error", e);
+public ClientWorker(final HttpAgent agent, final ConfigFilterChainManager configFilterChainManager,
+            final Properties properties) {
+        this.agent = agent;
+        this.configFilterChainManager = configFilterChainManager;
+        
+        // Initialize the timeout parameter
+        
+        init(properties);
+        
+        this.executor = Executors.newScheduledThreadPool(1, new ThreadFactory() {
+            @Override
+            public Thread newThread(Runnable r) {
+                Thread t = new Thread(r);
+                t.setName("com.alibaba.nacos.client.Worker." + agent.getName());
+                t.setDaemon(true);
+                return t;
             }
-        }
-    }, 1L, 10L, TimeUnit.MILLISECONDS);
-}
+        });
+        
+        this.executorService = Executors
+                .newScheduledThreadPool(Runtime.getRuntime().availableProcessors(), new ThreadFactory() {
+                    @Override
+                    public Thread newThread(Runnable r) {
+                        Thread t = new Thread(r);
+                        t.setName("com.alibaba.nacos.client.Worker.longPolling." + agent.getName());
+                        t.setDaemon(true);
+                        return t;
+                    }
+                });
+        
+        this.executor.scheduleWithFixedDelay(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    checkConfigInfo();
+                } catch (Throwable e) {
+                    LOGGER.error("[" + agent.getName() + "] [sub-check] rotate check error", e);
+                }
+            }
+        }, 1L, 10L, TimeUnit.MILLISECONDS);
+    }
 ```
 
-这里首先做的是agent和configFilterChainManager的属性设置.然后再init方法中初始化一些其他配置.  
+这里首先做的是agent和configFilterChainManager的属性设置.这里由名字也不难看到,ConfigFilterChainManager是一个典型的责任链模式,用于请求的责任链式过滤
+然后就是在init方法中初始化一些其他配置.  
 然后就是创建了两个线程池:
 *   第一个线程池是只拥有一个线程,用来执行定时任务的executor,executor每隔10ms就会执行一次checkConfigInfo() 方法,从方法名上可以知道是每10ms检查一次配置信息.
 *   第二个线程池是一个普通的线程池,从ThreadFactory的名称可以看到这个线程池是做长轮询的.
@@ -366,21 +432,24 @@ public void checkConfigInfo() {
 这里主要就是将监听配置分割为多个任务,然后丢到前面提到过的另外一个线程池executorService中来执行.这里稍微说一句cacheMap,在对某个dataId添加监听器的时候,会将其添加到该cacheMap中,后文讲configService.addListener的时候详细说.  
 
 #####   一.2.2       LongPollingRunnable   
-这里先重点看下要执行的任务,也就是LongPollingRunnable,在分析该任务源码前,应该先查看下一.3部分configService.addListener的源码分析,因为这里的长轮询任务内部逻辑,是在已经对某些dateId添加了监听器的前提下执行的,不然会搞不清前后逻辑依赖,容易懵逼.
+这里先重点看下要执行的任务,也就是LongPollingRunnable,在分析该任务源码前,应该先查看下第三部分configService.addListener的源码分析,因为这里的长轮询任务内部逻辑,是在已经对某些dateId添加了监听器的前提下执行的,不然会搞不清前后逻辑依赖,容易懵逼.
 
 ```
 class LongPollingRunnable implements Runnable {
-    private int taskId;
+    
+    private final int taskId;
+    
     public LongPollingRunnable(int taskId) {
         this.taskId = taskId;
     }
+    
     @Override
     public void run() {
+        
         List<CacheData> cacheDatas = new ArrayList<CacheData>();
         List<String> inInitializingCacheList = new ArrayList<String>();
         try {
             // check failover config
-            // 检查本地配置(failover文件)
             for (CacheData cacheData : cacheMap.get().values()) {
                 if (cacheData.getTaskId() == taskId) {
                     cacheDatas.add(cacheData);
@@ -394,10 +463,13 @@ class LongPollingRunnable implements Runnable {
                     }
                 }
             }
+            
             // check server config
-            // 检查服务端的配置信息，返回有变动的配置的groupId，dataId
             List<String> changedGroupKeys = checkUpdateDataIds(cacheDatas, inInitializingCacheList);
-            // 对变化的配置文件,请求server端获取其最新内容
+            if (!CollectionUtils.isEmpty(changedGroupKeys)) {
+                LOGGER.info("get changedGroupKeys:" + changedGroupKeys);
+            }
+            
             for (String groupKey : changedGroupKeys) {
                 String[] key = GroupKey.parseKey(groupKey);
                 String dataId = key[0];
@@ -407,30 +479,35 @@ class LongPollingRunnable implements Runnable {
                     tenant = key[2];
                 }
                 try {
-                    String content = getServerConfig(dataId, group, tenant, 3000L);
+                    String[] ct = getServerConfig(dataId, group, tenant, 3000L);
                     CacheData cache = cacheMap.get().get(GroupKey.getKeyTenant(dataId, group, tenant));
-                    cache.setContent(content);
-                    LOGGER.info("[{}] [data-received] dataId={}, group={}, tenant={}, md5={}, content={}",
-                        agent.getName(), dataId, group, tenant, cache.getMd5(),
-                        ContentUtils.truncateContent(content));
+                    cache.setContent(ct[0]);
+                    if (null != ct[1]) {
+                        cache.setType(ct[1]);
+                    }
+                    LOGGER.info("[{}] [data-received] dataId={}, group={}, tenant={}, md5={}, content={}, type={}",
+                            agent.getName(), dataId, group, tenant, cache.getMd5(),
+                            ContentUtils.truncateContent(ct[0]), ct[1]);
                 } catch (NacosException ioe) {
-                    String message = String.format(
-                        "[%s] [get-update] get changed config exception. dataId=%s, group=%s, tenant=%s",
-                        agent.getName(), dataId, group, tenant);
+                    String message = String
+                            .format("[%s] [get-update] get changed config exception. dataId=%s, group=%s, tenant=%s",
+                                    agent.getName(), dataId, group, tenant);
                     LOGGER.error(message, ioe);
                 }
             }
-            //  监听器回调方法,listenerWrap的lastCallMd5属性更新
             for (CacheData cacheData : cacheDatas) {
                 if (!cacheData.isInitializing() || inInitializingCacheList
-                    .contains(GroupKey.getKeyTenant(cacheData.dataId, cacheData.group, cacheData.tenant))) {
+                        .contains(GroupKey.getKeyTenant(cacheData.dataId, cacheData.group, cacheData.tenant))) {
                     cacheData.checkListenerMd5();
                     cacheData.setInitializing(false);
                 }
             }
             inInitializingCacheList.clear();
+            
             executorService.execute(this);
+            
         } catch (Throwable e) {
+            
             // If the rotation training task is abnormal, the next execution time of the task will be punished
             LOGGER.error("longPolling error : ", e);
             executorService.schedule(this, taskPenaltyTime, TimeUnit.MILLISECONDS);
