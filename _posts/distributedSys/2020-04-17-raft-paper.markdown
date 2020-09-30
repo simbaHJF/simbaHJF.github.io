@@ -1,7 +1,7 @@
 ---
 layout:     post
 title:      "分布式系统--Raft论文原文"
-date:       2020-04-07 20:30:00 +0800
+date:       2020-04-17 20:30:00 +0800
 author:     "simba"
 header-img: "img/post-bg-miui6.jpg"
 tags:

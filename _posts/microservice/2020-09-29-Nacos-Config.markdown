@@ -199,7 +199,7 @@ public MetricsHttpAgent(HttpAgent httpAgent) {
 }
 ```
 
-这里,我们看到,MetricsHttpAgent内部持有了一个ServerHttpAgent,并通过包装ServerHttpAgent的各个方法完成相关操作.
+这里,我们看到,MetricsHttpAgent内部持有了一个ServerHttpAgent,并通过包装ServerHttpAgent的各个方法完成相关操作,一个装饰器模式
 
 那么再看一下ServerHttpAgent的构造方法:
 ```
