@@ -432,7 +432,7 @@ public void checkConfigInfo() {
 这里主要就是将监听配置分割为多个任务,然后丢到前面提到过的另外一个线程池executorService中来执行.这里稍微说一句cacheMap,在对某个dataId添加监听器的时候,会将其添加到该cacheMap中,后文讲configService.addListener的时候详细说.  
 
 #####   一.2.2       LongPollingRunnable   
-这里先重点看下要执行的任务,也就是LongPollingRunnable,在分析该任务源码前,应该先查看下第三部分configService.addListener的源码分析,因为这里的长轮询任务内部逻辑,是在已经对某些dateId添加了监听器的前提下执行的,不然会搞不清前后逻辑依赖,容易懵逼.
+这里先重点看下要执行的任务,也就是LongPollingRunnable,在分析该任务源码前,应该先查看下第三部分configService.addListener的源码分析,因为这里的长轮询任务内部逻辑,是在已经对某些dateId添加了监听器的前提下执行的,不然会搞不清前后逻辑依赖,容易懵.
 
 ```
 class LongPollingRunnable implements Runnable {
@@ -454,7 +454,10 @@ class LongPollingRunnable implements Runnable {
                 if (cacheData.getTaskId() == taskId) {
                     cacheDatas.add(cacheData);
                     try {
+                        // 检查本地配置是否存在,是否有变更
                         checkLocalConfig(cacheData);
+
+                        //  如果使用本地配置,检查Md5的值有没有变化,就是配置信息有没有改变
                         if (cacheData.isUseLocalConfigInfo()) {
                             cacheData.checkListenerMd5();
                         }
@@ -517,17 +520,151 @@ class LongPollingRunnable implements Runnable {
 ```
 
 这里主要分4步:
-1.  check failover config.
+1.  check failover config,检查本地配置相关.
 2.  check server config.从Server获取值变化了的DataID列表,返回的是一个key列表,key由dataId,group和tenant(如果有的话)构成.
 3.  遍历第2步返回的有变化的key列表,对每一个key,反向解析出dataId,group,tenant,然后调用getServerConfig方法,获取配置的content,并更新md5
 4.  对变更了的CacheData,调用cacheData.checkListenerMd5(),该方法内部执行监听器回调方法,拉起回调是通过listener.receiveConfigInfo(contentTmp);这一行代码实现,由此可见,回调执行的是Listener的receiveConfigInfo方法,然后对listenerWrap的lastCallMd5进行更新.
 
-这里第3点再多说两句:  
+在第3点中:  
 一个是:正确收到服务端的响应结果后,会将配置的content内容更新到本地snapshot文件中.  
 另一个是:获取到content后会调用cache.setContent(content),在setContent方法内部,更新content后,还会继而更新CacheData对象的md5属性.
 
 
 完成上述操作后,会执行executorService.execute(this);方法,开启下一次长轮询.
+
+
+下面深入看下以上4部中的一些内部逻辑
+
+第1部分,checkLocalConfig,检查本地配置相关
+```
+private void checkLocalConfig(CacheData cacheData) {
+    final String dataId = cacheData.dataId;
+    final String group = cacheData.group;
+    final String tenant = cacheData.tenant;
+    File path = LocalConfigInfoProcessor.getFailoverFile(agent.getName(), dataId, group, tenant);
+    
+    //  如果开始没有使用本地配置,但是文件存在,主动开启本地配置
+    if (!cacheData.isUseLocalConfigInfo() && path.exists()) {
+        String content = LocalConfigInfoProcessor.getFailover(agent.getName(), dataId, group, tenant);
+        final String md5 = MD5Utils.md5Hex(content, Constants.ENCODE);
+        cacheData.setUseLocalConfigInfo(true);
+        cacheData.setLocalConfigInfoVersion(path.lastModified());
+        cacheData.setContent(content);
+        
+        LOGGER.warn(
+                "[{}] [failover-change] failover file created. dataId={}, group={}, tenant={}, md5={}, content={}",
+                agent.getName(), dataId, group, tenant, md5, ContentUtils.truncateContent(content));
+        return;
+    }
+    
+    // If use local config info, then it doesn't notify business listener and notify after getting from server.
+    //  开启本地配置了,但是文件被删除了,将本地配置设置为false.不通知业务监听器,从server拿到配置后通知
+    if (cacheData.isUseLocalConfigInfo() && !path.exists()) {
+        cacheData.setUseLocalConfigInfo(false);
+        LOGGER.warn("[{}] [failover-change] failover file deleted. dataId={}, group={}, tenant={}", agent.getName(),
+                dataId, group, tenant);
+        return;
+    }
+    
+    // When it changed.
+    //  使用本地配置并且文件存在,文件被修改重新加载本地文件
+    if (cacheData.isUseLocalConfigInfo() && path.exists() && cacheData.getLocalConfigInfoVersion() != path
+            .lastModified()) {
+        String content = LocalConfigInfoProcessor.getFailover(agent.getName(), dataId, group, tenant);
+        final String md5 = MD5Utils.md5Hex(content, Constants.ENCODE);
+        cacheData.setUseLocalConfigInfo(true);
+        cacheData.setLocalConfigInfoVersion(path.lastModified());
+        cacheData.setContent(content);
+        LOGGER.warn(
+                "[{}] [failover-change] failover file changed. dataId={}, group={}, tenant={}, md5={}, content={}",
+                agent.getName(), dataId, group, tenant, md5, ContentUtils.truncateContent(content));
+    }
+}
+```
+
+
+第4部分,检查md5的值是否改变,即配置是否改变,选择唤醒listener回调
+
+checkListenerMd5
+```
+void checkListenerMd5() {
+    for (ManagerListenerWrap wrap : listeners) {
+        if (!md5.equals(wrap.lastCallMd5)) {
+            safeNotifyListener(dataId, group, content, type, md5, wrap);
+        }
+    }
+}
+```
+
+safeNotifyListener
+```
+private void safeNotifyListener(final String dataId, final String group, final String content, final String type,
+        final String md5, final ManagerListenerWrap listenerWrap) {
+    final Listener listener = listenerWrap.listener;
+    
+    Runnable job = new Runnable() {
+        @Override
+        public void run() {
+            ClassLoader myClassLoader = Thread.currentThread().getContextClassLoader();
+            ClassLoader appClassLoader = listener.getClass().getClassLoader();
+            try {
+                if (listener instanceof AbstractSharedListener) {
+                    AbstractSharedListener adapter = (AbstractSharedListener) listener;
+                    adapter.fillContext(dataId, group);
+                    LOGGER.info("[{}] [notify-context] dataId={}, group={}, md5={}", name, dataId, group, md5);
+                }
+                // 执行回调之前先将线程classloader设置为具体webapp的classloader，以免回调方法中调用spi接口是出现异常或错用（多应用部署才会有该问题）。
+                Thread.currentThread().setContextClassLoader(appClassLoader);
+                
+                ConfigResponse cr = new ConfigResponse();
+                cr.setDataId(dataId);
+                cr.setGroup(group);
+                cr.setContent(content);
+                configFilterChainManager.doFilter(null, cr);
+                String contentTmp = cr.getContent();
+                listener.receiveConfigInfo(contentTmp);
+                
+                // compare lastContent and content
+                if (listener instanceof AbstractConfigChangeListener) {
+                    Map data = ConfigChangeHandler.getInstance()
+                            .parseChangeData(listenerWrap.lastContent, content, type);
+                    ConfigChangeEvent event = new ConfigChangeEvent(data);
+                    ((AbstractConfigChangeListener) listener).receiveConfigChange(event);
+                    listenerWrap.lastContent = content;
+                }
+                
+                listenerWrap.lastCallMd5 = md5;
+                LOGGER.info("[{}] [notify-ok] dataId={}, group={}, md5={}, listener={} ", name, dataId, group, md5,
+                        listener);
+            } catch (NacosException ex) {
+                LOGGER.error("[{}] [notify-error] dataId={}, group={}, md5={}, listener={} errCode={} errMsg={}",
+                        name, dataId, group, md5, listener, ex.getErrCode(), ex.getErrMsg());
+            } catch (Throwable t) {
+                LOGGER.error("[{}] [notify-error] dataId={}, group={}, md5={}, listener={} tx={}", name, dataId,
+                        group, md5, listener, t.getCause());
+            } finally {
+                Thread.currentThread().setContextClassLoader(myClassLoader);
+            }
+        }
+    };
+    
+    final long startNotify = System.currentTimeMillis();
+    try {
+        if (null != listener.getExecutor()) {
+            listener.getExecutor().execute(job);
+        } else {
+            job.run();
+        }
+    } catch (Throwable t) {
+        LOGGER.error("[{}] [notify-error] dataId={}, group={}, md5={}, listener={} throwable={}", name, dataId,
+                group, md5, listener, t.getCause());
+    }
+    final long finishNotify = System.currentTimeMillis();
+    LOGGER.info("[{}] [notify-listener] time cost={}ms in ClientWorker, dataId={}, group={}, md5={}, listener={} ",
+            name, (finishNotify - startNotify), dataId, group, md5, listener);
+}
+```
+
 
 
 
@@ -576,7 +713,7 @@ private String getConfigInner(String tenant, String dataId, String group, long t
 ```
 
 这里主要三个关键点:
-1.  这里首先会优先使用本地配置,也就是failover对应路径下的文件,如果存在就直接返回了,但是我在验证的时候,没见到有任何地方和代码逻辑会生成这个failover文件.  
+1.  这里首先会优先使用本地配置,也就是failover对应路径下的文件,如果存在就直接返回了,
 2.  如果不存在failover对应文件内容,就会去请求server端来获取配置内容
 3.  如果第二步过程中抛出了异常,会获取snapshot文件中的内容作为配置返回.
 
@@ -698,3 +835,20 @@ public void addListener(Listener listener) {
 
 
 至此,nacos客户端获取配置的源码就分析完了.
+
+
+#   总结
+
+客户端涉及到两类本地文件:
+*   failover文件----本地配置文件,会覆盖服务端配置(如果存在该文件,那么,对应配置不轮询center,也即center的变更,在client处没有体现;获取配置时,也不请求服务端,直接走failover文件中的配置)
+*   snapshot文件----本地配置文件,在请求center获取配置失败(异常)时,会使用snapshot中的对应配置值
+
+由此,可大体归纳为优先级: failover文件配置 > center配置 > snapshot文件配置
+
+
+创建ConfigService对象流程图:
+![0DgqH0.png](https://s1.ax1x.com/2020/10/09/0DgqH0.png)
+
+
+获取配置流程图:
+![0D5m28.png](https://s1.ax1x.com/2020/10/09/0D5m28.png)
