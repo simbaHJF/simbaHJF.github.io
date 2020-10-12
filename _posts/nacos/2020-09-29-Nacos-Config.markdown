@@ -5,7 +5,7 @@ date:       2020-09-29 00:00:00 +0800
 author:     "simba"
 header-img: "img/post-bg-miui6.jpg"
 tags:
-    - 微服务
+    - nacos
 
 ---
 
@@ -852,3 +852,7 @@ public void addListener(Listener listener) {
 
 获取配置流程图:
 ![0D5m28.png](https://s1.ax1x.com/2020/10/09/0D5m28.png)
+
+
+添加监听器流程图:
+![02NwE8.png](https://s1.ax1x.com/2020/10/12/02NwE8.png)
