@@ -45,6 +45,12 @@ Reactor多线程模型的特点如下:
 [![](https://s2.ax1x.com/2019/06/21/VxtIk4.md.png)](https://imgchr.com/i/VxtIk4)
 利用主从NIO线程模型,可以解决一个服务端监听线程无法有效处理所有客户端连接的性能不足问题.Netty的官方推荐采用主从Reactor线程模型.
 
+<br><br><br>
+
+**<font color="red">总结一下,Reactor多线程模型和主从Reactor多线程模型的差别</font>**
+*	Reactor多线程模型中,Reactor既负责连接事件,也负责读写事件(只是获取相关的事件,具体的读写处理,交由NIO读写线程池处理)
+*	主从Reactor多线程模型中,mainReactor只负责连接事件,之后将连接交由subReactor负责读写事件.
+
 
 ##	Netty的线程模型
 通过设置不同的参数,Netty可以支持Reactor单线程模型,多线程模型和主从Reactor多线程模型.Netty线程模型的原理图如下:
