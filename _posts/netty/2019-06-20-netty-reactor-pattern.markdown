@@ -13,6 +13,8 @@ tags:
  netty权威指南
 
 
+写在最前面的话,Reactor到底是什么呢?说白了就是一个运行中的线程.
+
 ##	Reactor单线程模型
 Reactor单线程模型,是指所有的I/O操作都在一个NIO线程上完成,NIO线程完成如下功能:
 *	作为NIO服务端,接收客户端的TCP连接
@@ -29,6 +31,85 @@ Reactor单线程模型中,Reactor,Acceptor和Handler在同一个线程中,多路
 *	可靠性问题:一旦NIO线程意外跑飞,或者进入死循环,会导致整个系统通信模块不可用,不能接受和处理外部消息,造成节点故障.
 
 
+这里以 JAVA NIO 做样例,描述一下 Reactor 单线程模型.
+```
+public class ReactorSingle implements Runnable{
+
+    private Selector selector;
+    private ServerSocketChannel serverSocketChannel;
+    private static final int port = 8086;
+
+    public ReactorSingle() {
+        try {
+            selector = Selector.open();
+            serverSocketChannel = ServerSocketChannel.open();
+            serverSocketChannel.configureBlocking(false);
+            serverSocketChannel.socket().bind(new InetSocketAddress(port),1024);
+            serverSocketChannel.register(selector, SelectionKey.OP_CONNECT);
+        } catch (Exception e) {
+
+        }
+    }
+
+    @Override
+    public void run() {
+        while (true) {
+            try {
+                selector.select();
+                Set<SelectionKey> selectionKeys = selector.selectedKeys();
+                Iterator<SelectionKey> iterator = selectionKeys.iterator();
+                SelectionKey key = null;
+                while (iterator.hasNext()) {
+                    key = iterator.next();
+                    iterator.remove();
+                    handle(key);
+                }
+            } catch (Exception e) {
+
+            }
+        }
+    }
+
+    private void handle(SelectionKey key) throws IOException {
+        if (key.isValid()) {
+            if (key.isAcceptable()) {
+                ServerSocketChannel serverSocketChannel = (ServerSocketChannel)key.channel();
+                SocketChannel sc = serverSocketChannel.accept();
+                sc.configureBlocking(false);
+                sc.register(this.selector, SelectionKey.OP_READ);
+            }
+            if (key.isReadable()) {
+                //这里假设数据不会超过1024个字节长度
+                SocketChannel sc = (SocketChannel) key.channel();
+                ByteBuffer readBuffer = ByteBuffer.allocate(1024);
+                sc.read(readBuffer);
+                readBuffer.flip();
+                byte[] bytes = new byte[readBuffer.remaining()];
+                readBuffer.get(bytes);
+
+                // ....对bytes的一些业务处理,省略
+
+                String resp = "OK";
+                byte[] respBytes = resp.getBytes();
+                ByteBuffer writeBuffer = ByteBuffer.allocate(respBytes.length);
+                writeBuffer.put(respBytes);
+                writeBuffer.flip();
+                sc.write(writeBuffer);
+            }
+            // ....省略一些其他
+        }
+    }
+
+    public static void main(String[] args) {
+        ReactorSingle reactorSingle = new ReactorSingle();
+        new Thread(reactorSingle).start();
+    }
+}
+```
+
+Reactor单线程模型,总结起来就是,连接,读写,业务处理,全都自己干且在自己这个本线程内干.示例图中的handler包含着读写以及业务处理逻辑,就如同上面描述代码中的handle函数一样,只不过上述代码中,为了简单,以方法形式写了,没有将其抽象出来最为一个handler对象而已.对应读写,就是调用handler对象处理,对于连接就是调用acceptor对象处理.
+
+
 ##	Reactor多线程模型
 Reactor多线程模型与单线程模型最大的区别是有一组NIO线程来处理I/O操作,它的原理如图所示:
 [![](https://s2.ax1x.com/2019/06/20/VxJobF.md.png)](https://imgchr.com/i/VxJobF)
@@ -37,7 +118,16 @@ Reactor多线程模型的特点如下:
 *	网络I/O操作----读,写等操作由一个NIO线程池负责,线程池可以采用标准的JDK线程池实现,它包含一个任务队列和N个可用的线程,由这些NIO线程负责消息的读取,解码,编码和发送.
 *	一个NIO线程可以同时处理N条链路,但是一个链路只对应一个NIO线程,防止发生并发操作问题.
 
-在绝大多数场景下,Reactor多线程模型可以满足性能需求.但是,在个别特殊场景中,一个NIO线程负责监听和处理所有的客户连接可能会存在性能问题.例如并发百万客户端连接,或者服务端需要对客户端握手进行安全认证,但是认证本身非常损耗性能.在这类场景下,单独一个Acceptor线程可能会存在性能不足的问题,为了解决性能问题,产生了第三种Reactor线程模型----主从Reactor多线程模型
+在绝大多数场景下,Reactor多线程模型可以满足性能需求.但是,在个别特殊场景中,一个NIO线程负责监听和处理所有的客户连接可能会存在性能问题.例如并发百万客户端连接,或者服务端需要对客户端握手进行安全认证,但是认证本身非常损耗性能.在这类场景下,单独一个Acceptor线程可能会存在性能不足的问题,为了解决性能问题,产生了第三种Reactor线程模型----主从Reactor多线程模型<br>
+
+
+拿前面的JAVA NIO 描述代码来讲, Reactor多线程模型与Reactor单线程模型的区别就在于:<br>
+Reactor多线程模型中,Reactor这个线程内只做这几件事:
+* 发现连接就绪事件,在Reactor本线程内,调用acceptor完成连接的accept处理和注册
+* 发现读写就绪事件,封装成一个任务,任务中调用相应的handler完成读写和业务处理工作.而这个任务是丢到另外的一个线程池中去做的,不在Reactor本线程中搞了.也就是说,对于读写就绪事件,还是由Reactor线程来发现的,但后面具体的读写和业务处理,就交给小弟(线程池)去弄了.
+
+
+
 
 
 ##	主从Reactor多线程模型
@@ -49,7 +139,9 @@ Reactor多线程模型的特点如下:
 
 **<font color="red">总结一下,Reactor多线程模型和主从Reactor多线程模型的差别</font>**
 *	Reactor多线程模型中,Reactor既负责连接事件,也负责读写事件(只是获取相关的事件,具体的读写处理,交由NIO读写线程池处理)
-*	主从Reactor多线程模型中,mainReactor只负责连接事件,之后将连接交由subReactor负责读写事件.
+*	主从Reactor多线程模型中,mainReactor只负责连接事件以及连接处理的这块操作,之后就将连接交由subReactor(可能是一个线程,也可能是一组线程)负责读写事件,而subReactor也采用甩锅这一套,只负责发现读写事件的就绪,将具体的读写和业务处理封装成任务(任务中调用相应handler),丢给线程池处理.
+
+
 
 
 ##	Netty的线程模型
