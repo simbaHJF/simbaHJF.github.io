@@ -24,6 +24,9 @@ tags:
 
 Dubbo 核心架构图:
 
+[![sb9kvQ.jpg](https://s3.ax1x.com/2021/01/24/sb9kvQ.jpg)](https://imgchr.com/i/sb9kvQ)
+
+
 [![seciIU.jpg](https://s3.ax1x.com/2021/01/07/seciIU.jpg)](https://imgchr.com/i/seciIU)
 
 **Registry:注册中心.** 负责服务地址的注册与查找,服务的 Provider 和 Consumer 只在启动时与注册中心交互.注册中心通过长连接感知 Provider 和 Consumer,在 Provider 出现宕机的时候,注册中心会立即通过与 Consumer 的长连接推送相关事件通知 Consumer.<br>
