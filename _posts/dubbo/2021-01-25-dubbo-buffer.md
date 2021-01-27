@@ -288,4 +288,4 @@ ChannelBufferInputStream通过封装持有 ChannelBuffer ,并继承 InputStream 
 
 而工厂创建 ChannelBuffer 则是通过调用工具类 ChannelBuffers.<br>
 
-以上,这些类的关系就串起来了.
+以上,这些类的关系就串起来了.ChannelBufferOutStream可类比.

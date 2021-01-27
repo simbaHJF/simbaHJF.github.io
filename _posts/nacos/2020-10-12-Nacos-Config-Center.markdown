@@ -465,7 +465,9 @@ class ProcessRunnable implements Runnable {
 
 #	五.	客户端配置值查询接口
 
-center缓存
+center缓存文件中读取<br>
+
+<font color="red">center收到读取配置的请求后,查询本地的缓存文件,将配置内容写入response,而不是把配置内容直接放在内存中缓存.</font>
 
 
 #   总结
