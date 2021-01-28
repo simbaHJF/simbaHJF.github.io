@@ -16,8 +16,10 @@ tags:
 [二. Server 继承路线分析](#jump2)
 <br>
 [三. Client 继承路线分析](#jump3)
-
-
+<br>
+[四. Channel 继承线分析](#jump4)
+<br>
+[五. ChannelHandler 继承线分析](#jump5)
 
 
 <br><br>
@@ -249,3 +251,252 @@ final NettyServerHandler nettyServerHandler = new NettyServerHandler(getUrl(), t
 到此为止,Server 这条继承线就介绍完了.回顾一下,从 AbstractPeer 开始往下,一路继承下来,NettyServer 拥有了 Endpoint、ChannelHandler 以及RemotingServer多个接口的能力,关联了一个 ChannelHandler 对象以及 Codec2 对象,并最终将数据委托给这两个对象进行处理.所以,上层调用方只需要实现 ChannelHandler 和 Codec2 这两个接口就可以了.
 
 [![sx8K7F.png](https://s3.ax1x.com/2021/01/27/sx8K7F.png)](https://imgchr.com/i/sx8K7F)
+
+
+
+<br><br>
+## <span id="jump3">三. Client 继承路线分析</span>
+
+接下来,来分析下AbstractClient类,先来开下AbstractClient的继承关系:
+[![sz5S9e.png](https://s3.ax1x.com/2021/01/27/sz5S9e.png)](https://imgchr.com/i/sz5S9e)
+
+AbstractClient 中的核心字段有如下几个:
+* connectLock(Lock 类型):在 Client 底层进行连接、断开、重连等操作时,需要获取该锁进行同步
+* needReconnect(Boolean 类型):在发送数据之前,会检查 Client 底层的连接是否断开,如果断开了,则会根据 needReconnect 字段,决定是否重连
+* executor(ExecutorService 类型):当前 Client 关联的线程池
+
+在 AbstractClient 的构造方法中,会解析 URL 初始化 needReconnect 字段和 executor字段,如下示例代码:
+```
+public AbstractClient(URL url, ChannelHandler handler) throws RemotingException {
+    super(url, handler); // 调用父类的构造方法
+    // 解析URL，初始化needReconnect值
+    needReconnect = url.getParameter("send.reconnect", false);
+    initExecutor(url);     // 解析URL，初始化executor
+    doOpen();    // 初始化底层的NIO库的相关组件
+    // 创建底层连接
+    connect(); // 省略异常处理的逻辑
+}
+
+```
+
+与 AbstractServer 类似,AbstractClient 定义了 doOpen()、doClose()、doConnect()和doDisConnect() 四个抽象方法给子类实现.<br>
+
+下面来看基于 Netty 4 实现的 NettyClient,它继承了 AbstractClient 抽象类,实现了上述四个 do\*() 抽象方法,我们这里重点关注 doOpen() 方法和 doConnect() 方法.在 NettyClient 的 doOpen() 方法中会通过 Bootstrap 构建客户端,其中会完成连接超时时间、keepalive 等参数的设置,以及 ChannelHandler 的创建和注册,具体实现如下所示:
+```
+protected void doOpen() throws Throwable {
+    // 创建NettyClientHandler
+    final NettyClientHandler nettyClientHandler = new NettyClientHandler(getUrl(), this);
+    bootstrap = new Bootstrap(); // 创建Bootstrap
+    bootstrap.group(NIO_EVENT_LOOP_GROUP)
+            .option(ChannelOption.SO_KEEPALIVE, true)
+            .option(ChannelOption.TCP_NODELAY, true)
+            .option(ChannelOption.ALLOCATOR, PooledByteBufAllocator.DEFAULT)
+            .channel(socketChannelClass());
+    // 设置连接超时时间，这里使用到AbstractEndpoint中的connectTimeout字段
+    bootstrap.option(ChannelOption.CONNECT_TIMEOUT_MILLIS, Math.max(3000, getConnectTimeout()));
+    bootstrap.handler(new ChannelInitializer<SocketChannel>() {
+        protected void initChannel(SocketChannel ch) throws Exception {
+            // 心跳请求的时间间隔
+            int heartbeatInterval = UrlUtils.getHeartbeat(getUrl());
+            // 通过NettyCodecAdapter创建Netty中的编解码器
+            NettyCodecAdapter adapter = new NettyCodecAdapter(getCodec(), getUrl(), NettyClient.this);
+            // 注册ChannelHandler
+            ch.pipeline().addLast("decoder", adapter.getDecoder())
+                    .addLast("encoder", adapter.getEncoder())
+                    .addLast("client-idle-handler", new IdleStateHandler(heartbeatInterval, 0, 0, MILLISECONDS))
+                    .addLast("handler", nettyClientHandler);
+            // 如果需要Socks5Proxy，需要添加Socks5ProxyHandler(略)
+        }
+    });
+}
+
+```
+得到的 NettyClient 结构如下图所示:
+[![szIma6.png](https://s3.ax1x.com/2021/01/27/szIma6.png)](https://imgchr.com/i/szIma6)
+
+NettyClientHandler 的实现方法与 NettyServerHandler 类似,同样是实现了 Netty 中的 ChannelDuplexHandler,其中会将所有方法委托给 NettyClient 关联的 ChannelHandler 对象进行处理.两者在 userEventTriggered() 方法的实现上有所不同,NettyServerHandler 在收到 IdleStateEvent 事件时会断开连接,而 NettyClientHandler 则会发送心跳消息,具体实现如下:
+```
+public void userEventTriggered(ChannelHandlerContext ctx, Object evt) throws Exception {
+    if (evt instanceof IdleStateEvent) {
+        NettyChannel channel = NettyChannel.getOrAddChannel(ctx.channel(), url, handler);
+        Request req = new Request(); 
+        req.setVersion(Version.getProtocolVersion());
+        req.setTwoWay(true);
+        req.setEvent(HEARTBEAT_EVENT); // 发送心跳请求
+        channel.send(req);
+    } else {
+        super.userEventTriggered(ctx, evt);
+    }
+}
+```
+
+
+<br><br>
+## <span id="jump4">四. Channel 继承线分析</span>
+
+除了前面介绍的 AbstractEndpoint 之外,AbstractChannel 也继承了 AbstractPeer 这个抽象类,同时还继承了 Channel 接口.AbstractChannel 实现非常简单,只是在 send() 方法中检测了底层连接的状态,没有实现具体的发送消息的逻辑.<br>
+
+这里我们依然以基于 Netty 4 的实现—— NettyChannel 为例,分析它对 AbstractChannel 的实现.NettyChannel 中的核心字段有如下几个
+* channel(Channel类型):Netty 框架中的 Channel,与当前的 Dubbo Channel 对象一一对应.
+* attributes(Map<String, Object>类型):当前 Channel 中附加属性,都会记录到该 Map 中.NettyChannel 中提供的 getAttribute()、hasAttribute()、setAttribute() 等方法,都是操作该集合
+* active(AtomicBoolean):用于标识当前 Channel 是否可用
+
+另外,在 NettyChannel 中还有一个静态的 Map 集合(CHANNEL_MAP 字段),用来缓存当前 JVM 中 Netty 框架 Channel 与 Dubbo Channel 之间的映射关系.<br>
+
+NettyChannel 中还有一个要介绍的是 send() 方法,它会通过底层关联的 Netty 框架 Channel,将数据发送到对端.其中,可以通过第二个参数指定是否等待发送操作结束,具体实现如下:
+```
+public void send(Object message, boolean sent) throws RemotingException {
+	// whether the channel is closed
+	// 调用AbstractChannel的send()方法检测连接是否可用
+	super.send(message, sent);
+	boolean success = true;
+	int timeout = 0;
+	try {
+		// 依赖Netty框架的Channel发送数据
+	    ChannelFuture future = channel.writeAndFlush(message);
+	    if (sent) { // 等待发送结束，有超时时间
+	        // wait timeout ms
+	        timeout = getUrl().getPositiveParameter(TIMEOUT_KEY, DEFAULT_TIMEOUT);
+	        success = future.await(timeout);
+	    }
+	    Throwable cause = future.cause();
+	    if (cause != null) {
+	        throw cause;
+	    }
+	} catch (Throwable e) {
+		// 出现异常会调用removeChannelIfDisconnected()方法,在底层连接断开时,会清理CHANNEL_MAP缓存
+	    removeChannelIfDisconnected(channel);
+	    throw new RemotingException(this, "Failed to send message " + PayloadDropper.getRequestWithoutData(message) + 	" to " + getRemoteAddress() + ", cause: " + e.getMessage(), e);
+	}
+	if (!success) {
+	    throw new RemotingException(this, "Failed to send message " + PayloadDropper.getRequestWithoutData(message) + 	" to " + getRemoteAddress()
+	            + "in timeout(" + timeout + "ms) limit");
+	}
+}
+```
+
+
+
+<br><br>
+## <span id="jump5">五. ChannelHandler 继承线分析</span>
+
+前文介绍的 AbstractServer、AbstractClient 以及 Channel 实现,都是通过 AbstractPeer 实现了 ChannelHandler 接口,但只是做了一层简单的委托(也可以说成是装饰器),将全部方法委托给了其底层关联的 ChannelHandler 对象.<br>
+
+这里我们就深入分析 ChannelHandler 的其他实现类,涉及的实现类如下所示:
+[![y9vt1A.png](https://s3.ax1x.com/2021/01/28/y9vt1A.png)](https://imgchr.com/i/y9vt1A)
+
+ChannelHandlerDispatcher是负责将多个ChannelHandler对象聚合成一个ChannelHandler对象.<br>
+
+ChannelHandlerAdapter是 ChannelHandler 的一个空实现,TelnetHandlerAdapter 继承了它并实现了 TelnetHandler 接口.<br>
+
+ChannelHandlerDelegate接口是对另一个 ChannelHandler 对象的封装,它的两个实现类 AbstractChannelHandlerDelegate 和 WrappedChannelHandler 中也仅仅是封装了另一个 ChannelHandler 对象.<br>
+
+
+<br>
+**<font size="3">ChannelHandlerDelegate ----> AbstractChannelHandlerDelegate 继承线</font>** <br>
+
+首先来看下AbstractChannelHandlerDelegate,它有三个实现类:
+* MultiMessageHandler: 专门处理 MultiMessage 的 ChannelHandler 实现.MultiMessage 是 Exchange 层的一种消息类型,它其中封装了多个消息.在 MultiMessageHandler 收到 MultiMessage 消息的时候,received() 方法会遍历其中的所有消息,并交给底层的 ChannelHandler 对象进行处理
+* DecodeHandler: 专门处理 Decodeable 的 ChannelHandler 实现.实现了 Decodeable 接口的类都会提供了一个 decode() 方法实现对自身的解码,DecodeHandler.received() 方法就是通过该方法得到解码后的消息,然后传递给底层的 ChannelHandler 对象继续处理
+* HeartbeatHandler: 专门处理心跳消息的 ChannelHandler 实现.在 HeartbeatHandler.received() 方法接收心跳请求的时候,会生成相应的心跳响应并返回;在收到心跳响应的时候,会打印相应的日志;在收到其他类型的消息时,会传递给底层的 ChannelHandler 对象进行处理.下面是其核心实现:
+```
+public void received(Channel channel, Object message) throws RemotingException {
+    setReadTimestamp(channel); // 记录最近的读写事件时间戳
+    if (isHeartbeatRequest(message)) { // 收到心跳请求
+        Request req = (Request) message;
+        if (req.isTwoWay()) { // 返回心跳响应，注意，携带请求的ID
+            Response res = new Response(req.getId(), req.getVersion());
+            res.setEvent(HEARTBEAT_EVENT);
+            channel.send(res);
+        return;
+    }
+    if (isHeartbeatResponse(message)) { // 收到心跳响应
+        // 打印日志(略)
+        return;
+    }
+    handler.received(channel, message);
+}
+```
+另外我们可以看到,在 received() 和 send() 方法中,HeartbeatHandler 会将最近一次的读写时间作为附加属性记录到 Channel 中.<br>
+
+AbstractChannelHandlerDelegate 下的三个实现,其实都是在原有 ChannelHandler 的基础上添加了一些增强功能,这是典型的装饰器模式的应用
+
+
+<br>
+**<font size="3">ChannelHandlerDelegate ----> WrappedChannelHandler 继承线</font>** <br>
+
+WrappedChannelHandler子类主要是决定了 Dubbo 以何种线程模型处理收到的事件和消息,就是所谓的“消息派发机制”,与前面介绍的 ThreadPool 有紧密的联系
+[![yCCshT.png](https://s3.ax1x.com/2021/01/28/yCCshT.png)](https://imgchr.com/i/yCCshT)
+
+从上图中我们可以看到,每个 WrappedChannelHandler 实现类的对象都由一个相应的 Dispatcher 实现类创建,下面是 Dispatcher 接口的定义
+```
+@SPI(AllDispatcher.NAME) // 默认扩展名是all
+public interface Dispatcher {
+    // 通过URL中的参数可以指定扩展名，覆盖默认扩展名
+    @Adaptive({"dispatcher", "dispather", "channel.handler"})
+    ChannelHandler dispatch(ChannelHandler handler, URL url);
+}
+```
+
+AllDispatcher 创建的是 AllChannelHandler 对象,它会将所有网络事件以及消息交给关联的线程池进行处理.AllChannelHandler覆盖了 WrappedChannelHandler 中除了 sent() 方法之外的其他网络事件处理方法,将调用其底层的 ChannelHandler 的逻辑放到关联的线程池中执行.<br>
+
+我们先来看 connect() 方法,其中会将CONNECTED 事件的处理封装成ChannelEventRunnable提交到线程池中执行,具体实现如下:
+```
+public void connected(Channel channel) throws RemotingException {
+    ExecutorService executor = getExecutorService(); // 获取公共线程池
+    // 将CONNECTED事件的处理封装成ChannelEventRunnable提交到线程池中执行
+    executor.execute(new ChannelEventRunnable(channel, handler, ChannelState.CONNECTED));
+    // 省略异常处理的逻辑
+}
+```
+
+这里的 getExecutorService() 方法会按照当前端点(Server/Client)的 URL 从 ExecutorRepository 中获取相应的公共线程池.<br>
+
+disconnected()方法处理连接断开事件,caught() 方法处理异常事件,它们也是按照上述方式实现的,这里不再展开赘述.<br>
+
+received() 方法会在当前端点收到数据的时候被调用,用 AllChannelHandler 的 received() 方法,其中会将请求提交给线程池执行,执行完后调用 sent()方法,向对端写回响应结果.received()方法的具体实现如下:
+```
+public void received(Channel channel, Object message) throws RemotingException {
+	// 获取线程池
+    ExecutorService executor = getPreferredExecutorService(message);
+    try {
+    	// 将消息封装成ChannelEventRunnable任务，提交到线程池中执行
+        executor.execute(new ChannelEventRunnable(channel, handler, ChannelState.RECEIVED, message));
+    } catch (Throwable t) {
+    	// 如果线程池满了，请求会被拒绝，这里会根据请求配置决定是否返回一个说明性的响应
+    	if(message instanceof Request && t instanceof RejectedExecutionException){
+            sendFeedback(channel, (Request) message, t);
+            return;
+    	}
+        throw new ExecutionException(message, channel, getClass() + " error when process received event .", t);
+    }
+}
+```
+
+
+ExecutionChannelHandler(由 ExecutionDispatcher 创建)只会将请求消息派发到线程池进行处理,也就是只重写了 received() 方法.对于响应消息以及其他网络事件(例如,连接建立事件、连接断开事件、心跳消息等),ExecutionChannelHandler 会直接在 IO 线程中进行处理.<br>
+
+DirectChannelHandler 实现(由 DirectDispatcher 创建)会在 IO 线程中处理所有的消息和网络事件.<br>
+
+MessageOnlyChannelHandler 实现(由 MessageOnlyDispatcher 创建)会将所有收到的消息提交到线程池处理,其他网络事件则是由 IO 线程直接处理.<br>
+
+ConnectionOrderedChannelHandler 实现(由 ConnectionOrderedDispatcher 创建)会将收到的消息交给线程池进行处理,对于连接建立以及断开事件,会提交到一个独立的线程池并排队进行处理.<br>
+
+
+
+到此为止,Transporter 层对 ChannelHandler 的实现就介绍完了,其中涉及了多个 ChannelHandler 的装饰器,为了帮助你更好地理解,这里我们回到 NettyServer 中,看看它是如何对上层 ChannelHandler 进行封装的.<br>
+
+在 NettyServer 的构造方法中会调用 ChannelHandlers.wrap() 方法对传入的 ChannelHandler 对象进行修饰:
+```
+protected ChannelHandler wrapInternal(ChannelHandler handler, URL url) {
+    return new MultiMessageHandler(new HeartbeatHandler(ExtensionLoader.getExtensionLoader(Dispatcher.class)
+            .getAdaptiveExtension().dispatch(handler, url)));
+}
+```
+
+
+结合前面的分析，我们可以得到下面这张图:
+[![yCKaGj.png](https://s3.ax1x.com/2021/01/29/yCKaGj.png)](https://imgchr.com/i/yCKaGj)
+
+我们可以在创建 NettyServerHandler 的地方添加断点 Debug 得到下图,也印证了上图的内容:
+[![yCK2i4.png](https://s3.ax1x.com/2021/01/29/yCK2i4.png)](https://imgchr.com/i/yCK2i4)
