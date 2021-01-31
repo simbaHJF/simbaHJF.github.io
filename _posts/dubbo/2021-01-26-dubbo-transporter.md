@@ -454,7 +454,7 @@ public void connected(Channel channel) throws RemotingException {
 
 disconnected()方法处理连接断开事件,caught() 方法处理异常事件,它们也是按照上述方式实现的,这里不再展开赘述.<br>
 
-received() 方法会在当前端点收到数据的时候被调用,用 AllChannelHandler 的 received() 方法,其中会将请求提交给线程池执行,执行完后调用 sent()方法,向对端写回响应结果.received()方法的具体实现如下:
+received() 方法会在当前端点收到数据的时候被调用,用 AllChannelHandler 的 received() 方法,其中会将请求提交给线程池执行,执行完后调用 send()方法,向对端写回响应结果.received()方法的具体实现如下:
 ```
 public void received(Channel channel, Object message) throws RemotingException {
 	// 获取线程池
