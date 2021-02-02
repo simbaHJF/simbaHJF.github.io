@@ -18,6 +18,8 @@ tags:
 [三. ExchangeChannel 和 DefaultFuture](#jump3)
 <br>
 [四. HeaderExchangeHandler](#jump4)
+<br>
+[五. HeaderExchangeClient](#jump5)
 
 
 
@@ -306,4 +308,52 @@ void handleRequest(final ExchangeChannel channel, Request req) throws RemotingEx
 
 在connected() 方法中,会为 Dubbo Channel 创建相应的 HeaderExchangeChannel,并将两者绑定,然后通知上层 ExchangeHandler 处理 connect 事件<br>
 
-在disconnected() 方法中,首先通知上层 ExchangeHandler 进行处理,之后在 DefaultFuture.closeChannel() 通知 DefaultFuture 连接断开(其实就是创建并传递一个 Response,该 Response 的状态码为 CHANNEL_INACTIVE),这样就不会继续阻塞业务线程了,最后再将 HeaderExchangeChannel 与底层的 Dubbo Channel 解绑
+在disconnected() 方法中,首先通知上层 ExchangeHandler 进行处理,之后在 DefaultFuture.closeChannel() 通知 DefaultFuture 连接断开(其实就是创建并传递一个 Response,该 Response 的状态码为 CHANNEL_INACTIVE),这样就不会继续阻塞业务线程了,最后再将 HeaderExchangeChannel 与底层的 Dubbo Channel 解绑.<br>
+
+
+
+<br><br>
+## <span id="jump5">五. HeaderExchangeClient</span>
+
+HeaderExchangeClient 是 Client 装饰器,主要为其装饰的 Client 添加两个功能:
+* 维持与 Server 的长连状态,这是通过定时发送心跳消息实现的
+* 在因故障掉线之后,进行重连,这是通过定时检查连接状态实现的
+
+因此,HeaderExchangeClient 侧重定时轮资源的分配、定时任务的创建和取消<br>
+
+HeaderExchangeClient 实现的是 ExchangeClient 接口,如下图所示,间接实现了 ExchangeChannel 和 Client 接口,ExchangeClient 接口是个空接口,没有定义任何方法
+[![yuI1XQ.png](https://s3.ax1x.com/2021/02/02/yuI1XQ.png)](https://imgchr.com/i/yuI1XQ)
+
+HeaderExchangeClient 中有以下两个核心字段:
+* client(Client 类型):被修饰的 Client 对象.HeaderExchangeClient 中对 Client 接口的实现,都会委托给该对象进行处理
+* channel(ExchangeChannel 类型):Client 与服务端建立的连接,HeaderExchangeClient 中对 ExchangeChannel 接口的实现,都会委托给该对象进行处理.<br>
+
+HeaderExchangeClient 构造方法的第一个参数封装 Transport 层的 Client 对象,第二个参数 startTimer参与控制是否开启心跳定时任务和重连定时任务,如果为 true,才会进一步根据其他条件,最终决定是否启动定时任务.这里我们以心跳定时任务为例:
+```
+private void startHeartBeatTask(URL url) {
+
+    if (!client.canHandleIdle()) { // Client的具体实现决定是否启动该心跳任务
+
+        AbstractTimerTask.ChannelProvider cp = () -> Collections.singletonList(HeaderExchangeClient.this);
+
+        // 计算心跳间隔，最小间隔不能低于1s
+        int heartbeat = getHeartbeat(url); 
+
+        long heartbeatTick = calculateLeastDuration(heartbeat);
+
+        // 创建心跳任务
+        this.heartBeatTimerTask = new HeartbeatTimerTask(cp, heartbeatTick, heartbeat);
+
+        // 提交到IDLE_CHECK_TIMER这个时间轮中等待执行
+        IDLE_CHECK_TIMER.newTimeout(heartBeatTimerTask, heartbeatTick, TimeUnit.MILLISECONDS);
+    }
+}
+```
+
+重连定时任务是在 startReconnectTask() 方法中启动的,其中会根据 URL 中的参数决定是否启动任务.重连定时任务最终也是提交到 IDLE_CHECK_TIMER 这个时间轮中,时间轮定义如下
+```
+private static final HashedWheelTimer IDLE_CHECK_TIMER = new HashedWheelTimer(
+
+            new NamedThreadFactory("dubbo-client-idleCheck", true), 1, TimeUnit.SECONDS, TICKS_PER_WHEEL);
+
+```
