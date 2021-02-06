@@ -15,13 +15,18 @@ tags:
 [![yeHdm9.png](https://s3.ax1x.com/2021/02/01/yeHdm9.png)](https://imgchr.com/i/yeHdm9)
 
 
+<br><br>
+
 ## 导航
 [一. Bubble Sort](#jump1)
 <br>
 [二. Selection Sort](#jump2)
 <br>
-
-
+[三. Insertion Sort](#jump3)
+<br>
+[四. Quick Sort](#jump4)
+<br>
+[五. Merge Sort](#jump5)
 
 
 <br><br>
@@ -98,3 +103,138 @@ flagIdx 记录该轮遍历过程中,最小元素的下标.当然也可以不记,
 内层循环 j , 控制需要与当前最小元素进行比较的下标,每轮都比较到最后.<br>
 
 一轮比较完成后,进行一次交换,这时候也有可能起始元素就是最小的,此时即使交换也没有影响(自己和自己交换).<br>
+
+
+<br><br>
+## <span id="jump3">三. Insertion Sort</span>
+
+```
+/**
+ * @author: simab.hjf
+ * @description: 插入排序
+ * @date: Created in  2021-02-01 22:56
+ */
+public class InsertionSort {
+
+    public static void insertionSort(int[] arr) {
+        if (arr == null || arr.length == 0) {
+            return;
+        }
+        for (int i = 0; i < arr.length - 1; i++) {
+            int j = i + 1;
+            int needInsertionEleValue = arr[j];
+            for (; j > 0; j--) {
+                if (needInsertionEleValue < arr[j - 1]) {
+                    arr[j] = arr[j - 1];
+                } else {
+                    break;
+                }
+            }
+            arr[j] = needInsertionEleValue;
+        }
+    }
+}
+```
+
+算法描述: 通过构建有序序列,对于未排序数据,在已排序序列中从后向前扫描,找到相应位置并插入.一般来说,插入排序都采用in-place在数组上实现,具体如下:
+* 步骤1: 从第一个元素开始,该元素可以认为已经被排序;
+* 步骤2: 取出下一个元素,在已经排序的元素序列中从后向前扫描;
+* 步骤3: 如果该元素(已排序)大于新元素,将该元素移到下一位置;
+* 步骤4: 重复步骤3,直到找到已排序的元素小于或者等于新元素的位置;
+* 步骤5: 将新元素插入到该位置后;
+* 步骤6: 重复步骤2~5.
+
+
+
+<br><br>
+## <span id="jump4">四. Quick Sort</span>
+
+```
+/**
+ * @author: simab.hjf
+ * @description: 快速排序
+ * @date: Created in  2021-02-01 23:41
+ */
+public class QuickSort {
+    public static void quickSort(int[] arr, int left, int right) {
+        if (arr == null || arr.length == 0 || arr.length == 1) {
+            return;
+        }
+        if (left < right) { //重要
+            int benchmarkIdx = divide(arr, left, right);
+            quickSort(arr, left, benchmarkIdx - 1);
+            quickSort(arr, benchmarkIdx + 1, right);
+        }
+
+    }
+
+    public static int divide(int[] arr, int left, int right) {
+        int benchmark = arr[left];
+        while (left < right) {
+            while (benchmark <= arr[right] && left < right) {
+                right--;
+            }
+            arr[left] = arr[right];
+
+            while (benchmark >= arr[left] && left < right) {
+                left++;
+            }
+            arr[right] = arr[left];
+        }
+        arr[right] = benchmark;
+        return right;
+    }
+}
+```
+
+算法描述: 从数组中选择一个元素,把这个元素称之为中轴元素,然后把数组中所有小于中轴元素的元素放在其左边,所有大于或等于中轴元素的元素放在其右边,显然,此时中轴元素所处的位置的是其最终的正确位置.然后递归对前后两个部分执行相同操作,最终数组整体有序.
+
+
+<br><br>
+## <span id="jump5">五. Merge Sort</span>
+
+```
+/**
+ * @author: simab.hjf
+ * @description: 归并排序
+ * @date: Created in  2021/2/6 上午10:47
+ */
+public class MergeSort {
+    public static void mergeSort(int[] arr, int left, int ritht) {
+        if (arr == null || arr.length == 0 || left == ritht) {
+            return;
+        }
+        int middle = (left + ritht) / 2;
+        mergeSort(arr, left, middle);
+        mergeSort(arr, middle + 1, ritht);
+
+        int[] auxiliaryArr = new int[ritht - left + 1];
+        int auxiliartArrIdx = 0;
+        int leftArrIdx = left;
+        int rithtArrIdx = middle + 1;
+
+        while (leftArrIdx <= middle && rithtArrIdx <= ritht) {
+            if (arr[leftArrIdx] <= arr[rithtArrIdx]) {
+                auxiliaryArr[auxiliartArrIdx++] = arr[leftArrIdx++];
+            } else {
+                auxiliaryArr[auxiliartArrIdx++] = arr[rithtArrIdx++];
+            }
+        }
+        while (leftArrIdx <= middle) {
+            auxiliaryArr[auxiliartArrIdx++] = arr[leftArrIdx++];
+        }
+
+        while (rithtArrIdx <= ritht) {
+            auxiliaryArr[auxiliartArrIdx++] = arr[rithtArrIdx++];
+        }
+        for (int i = left; i <= ritht; i++) {
+            arr[i] = auxiliaryArr[i - left];
+        }
+    }
+}
+```
+
+算法描述: 将一个大的无序数组排序,可以先把大的数组分成两个,然后对这两个数组分别进行排序,之后在把这两个数组合并成一个有序的数组.分治思想.
+* 步骤1: 把长度为n的输入序列分成两个长度为n/2的子序列;
+* 步骤2: 对这两个子序列分别采用归并排序;
+* 步骤3: 将两个排序好的子序列合并成一个最终的排序序列
