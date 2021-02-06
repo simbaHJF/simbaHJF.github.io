@@ -484,7 +484,8 @@ public class HeaderExchanger implements Exchanger {
 
 Codec2 接口提供了 encode() 和 decode() 两个方法来实现消息与字节流之间的相互转换.需要注意与 DecodeHandler 区分开来,DecodeHandler 是对请求体和响应结果的解码,Codec2 是对整个请求和响应的编解码.<br>
 
-具体点来说,以decode为例,Codec2按照协议规则(默认dubbo)解码消息头(这里包括对消息TCP半包和粘包的处理),将消息体数据流(ChannelBufferInputStream) 封装成 DecodeableRpcResult , 传给给后面的 DecodeHandler ,内部调用Serialization(默认为hessian2)以完成消息体反序列化为对象.<br>
+具体点来说,以decode为例,Codec2按照协议规则(默认dubbo)解码消息头(这里包括对消息TCP半包和粘包的处理),将消息体数据流(ChannelBufferInputStream) 封装成 DecodeableRpcResult , 然后根据Channel持有的url中的"decode.in.io"决定是直接在当前的io线程decode消息体,还是传给给后面的 DecodeHandler ,内部调用Serialization(默认为hessian2)以完成decode消息体."decode.in.io"默认为false,即交给后面的DecodeHandler处理.
+而DecodeHandler则是被AllChannelHandler(默认)装饰,因此会派到线程池里去做消息体decode.<br>
 
 下面重点介绍 Transport 层和 Exchange 层对 Codec2 接口的实现,涉及的类如下图所示:
 [![yJUzkT.png](https://s3.ax1x.com/2021/02/05/yJUzkT.png)](https://imgchr.com/i/yJUzkT)
