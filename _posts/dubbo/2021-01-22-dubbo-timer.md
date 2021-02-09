@@ -38,6 +38,9 @@ JDK 提供的 java.util.Timer 和 DelayedQueue 等工具类,可以帮助我们�
 
 需要注意的是,单层时间轮的容量和精度都是有限的,对于精度要求特别高、时间跨度特别大或是海量定时任务需要调度的场景,通常会使用多级时间轮以及持久化存储与时间轮结合的方案.<br>
 
+<font color="red">或者采用在时间轮中加入周期的概念来解决.</font>
+
+<br>
 在 Dubbo 中,时间轮的实现位于 dubbo-common 模块的org.apache.dubbo.common.timer 包中.<br>
 
 
@@ -312,4 +315,6 @@ private final class Worker implements Runnable {
 
 向HashedWheelTimer添加定时任务时为什么采用先添加到timeouts队列中,再由worker将其添加到时间轮中呢?为什么不直接放进时间轮里?<br>
 
-我觉得这里是因为对于一个时间轮资源,多个线程并发向时间轮中某个桶管理的双向链表中直接增改节点会造成并发问题,如果为了解决此问题而引入一些同步机制,又会影响性能.而HashedWheelTimer设计的方式,通过一个缓冲队列timeouts和worker配合,屏蔽了这种并发问题,降低了复杂性.
+我觉得这里是因为对于一个时间轮资源,多个线程并发向时间轮中某个桶管理的双向链表中直接增改节点会造成并发问题,如果为了解决此问题而引入一些同步机制,又会影响性能.而HashedWheelTimer设计的方式,通过一个缓冲队列timeouts和worker配合,屏蔽了这种并发问题,降低了复杂性.<br>
+
+<font color="red">另外一点需要注意,如果加入时间轮中的任务在执行时不是放到一个业务线程池中进行处理,而是在worker时间轮worker线程中执行的话,如果是长耗时任务,会造成后面任务的阻塞与等待.</font>
