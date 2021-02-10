@@ -284,7 +284,7 @@ public static boolean equals(ChannelBuffer bufferA, ChannelBuffer bufferB) {
 
 ChannelBufferInputStream通过封装持有 ChannelBuffer ,并继承 InputStream ,通过操作 ChannelBuffer 来实现 InputStream 中的 read() 方法.<br>
 
-而 ChannelBuffer 的创建则是通过响应的工厂来实现的,例如 HeapChannelBufferFactory 创建 HeapChannelBuffer .<br>
+而 ChannelBuffer 的创建则是通过相应的工厂来实现的,例如 HeapChannelBufferFactory 创建 HeapChannelBuffer .<br>
 
 而工厂创建 ChannelBuffer 则是通过调用工具类 ChannelBuffers.<br>
 
