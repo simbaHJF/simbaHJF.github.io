@@ -387,7 +387,7 @@ public void send(Object message, boolean sent) throws RemotingException {
 这里我们就深入分析 ChannelHandler 的其他实现类,涉及的实现类如下所示:
 [![y9vt1A.png](https://s3.ax1x.com/2021/01/28/y9vt1A.png)](https://imgchr.com/i/y9vt1A)
 
-ChannelHandlerDispatcher是负责将多个ChannelHandler对象聚合成一个ChannelHandler对象.<br>
+<font color="red">ChannelHandlerDispatcher是负责将多个ChannelHandler对象聚合成一个ChannelHandler对象.</font>
 
 ChannelHandlerAdapter是 ChannelHandler 的一个空实现,TelnetHandlerAdapter 继承了它并实现了 TelnetHandler 接口.<br>
 
@@ -427,7 +427,7 @@ AbstractChannelHandlerDelegate 下的三个实现,其实都是在原有 ChannelH
 <br>
 **<font size="3">ChannelHandlerDelegate ----> WrappedChannelHandler 继承线</font>** <br>
 
-WrappedChannelHandler子类主要是决定了 Dubbo 以何种线程模型处理收到的事件和消息,就是所谓的“消息派发机制”,与前面介绍的 ThreadPool 有紧密的联系
+<font color="red">WrappedChannelHandler子类主要是决定了 Dubbo 以何种线程模型处理收到的事件和消息,就是所谓的“消息派发机制”,与前面介绍的 ThreadPool 有紧密的联系</font>
 [![yCCshT.png](https://s3.ax1x.com/2021/01/28/yCCshT.png)](https://imgchr.com/i/yCCshT)
 
 从上图中我们可以看到,每个 WrappedChannelHandler 实现类的对象都由一个相应的 Dispatcher 实现类创建,下面是 Dispatcher 接口的定义
@@ -440,7 +440,12 @@ public interface Dispatcher {
 }
 ```
 
-AllDispatcher 创建的是 AllChannelHandler 对象,它会将所有网络事件以及消息交给关联的线程池进行处理.AllChannelHandler覆盖了 WrappedChannelHandler 中除了 sent() 方法之外的其他网络事件处理方法,将调用其底层的 ChannelHandler 的逻辑放到关联的线程池中执行.<br>
+AllDispatcher 创建的是 AllChannelHandler 对象,它会将所有网络事件以及消息交给关联的线程池进行处理.
+
+<font color="red">官方文档说:"all 模式是所有消息都派发到线程池，包括请求，响应，连接事件，断开事件，心跳等".这里我认为写的是有误的,心跳事件不会被派发到线程池而是在IO线程直接就搞定返回了.分析源码查看各个ChannelHandler的包装顺序也可以发现,处理心跳的ChannelHandler是在线程模型ChannelHandler之前就执行完了的.</font>
+**<font color="red">换句话总结说,dubbo中设置的任何一种线程模型,从源码分析角度,都不可能把心跳消息派发到业务线程池中.</font>**
+
+AllChannelHandler覆盖了 WrappedChannelHandler 中除了 sent() 方法之外的其他网络事件处理方法,将调用其底层的 ChannelHandler 的逻辑放到关联的线程池中执行.<br>
 
 我们先来看 connect() 方法,其中会将CONNECTED 事件的处理封装成ChannelEventRunnable提交到线程池中执行,具体实现如下:
 ```

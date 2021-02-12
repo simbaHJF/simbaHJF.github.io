@@ -26,19 +26,24 @@ tags:
 [七. HeaderExchanger](#jump7)
 <br>
 [八. 再谈 Codec2](#jump8)
+<br>
+[九. 一点总结](#jump9)
 
 
 
 <br><br>
 ## <span id="jump1">一. 前言</span>
 Dubbo 将信息交换行为抽象成 Exchange 层,官方文档对这一层的说明是:封装了请求-响应的语义,即关注一问一答的交互模式,实现了同步转异步.在 Exchange 这一层,以 Request 和 Response 为中心,针对 Channel、ChannelHandler、Client、RemotingServer 等接口进行实现.<br>
-
+<font color="red">这些接口的定义都是在remoting层,而在exchange做了一些实现,体现了下层进行抽象定义,上层调用方根据使用需要做具体细节实现的这样一种思想</font>
 
 
 <br><br>
 ## <span id="jump2">二. Request 和 Response</span>
 
-Exchange 层的 Request 和 Response 这两个类是 Exchange 层的核心对象,是对请求和响应的抽象.我们先来看Request 类的核心字段:
+Exchange 层的 Request 和 Response 这两个类是 Exchange 层的核心对象,是对请求和响应的抽象.
+<font color="red">Request 和 Response并不是被底层传输的对象,而只是Exchange层抽象出来的在端点内进行一些操作用到的数据结构,不参与网络传输.网络传输的数据是根据Request 和 Response及其他一些信息构建出来的消息头、消息体的字节数组序列（这个过程涉及正反序列化）,而不是直接对Request 和 Response进行正反序列化</font>
+
+我们先来看Request 类的核心字段:
 ```
 public class Request {
     // 用于生成请求的自增ID，当递增到Long.MAX_VALUE之后，会溢出到Long.MIN_VALUE，我们可以继续使用该负数作为消息ID
@@ -258,6 +263,8 @@ private void notifyTimeout(DefaultFuture future) {
     DefaultFuture.received(future.getChannel(), timeoutResponse, true);
 }
 ```
+
+<font color="red">这里总结一下,正常的response返回以及提交到时间轮中的超时检查任务,最终都会调用到DefaultFuture.received()方法,在该方法中首先会从FUTURES中remove请求id对应的DefaultFuture,判断remove结果不为空才会继续执行,以此保证并发时的安全性</font>
 
 
 <br><br>
@@ -574,3 +581,9 @@ protected void encodeRequest(Channel channel, ChannelBuffer buffer, Request req)
 encodeResponse() 方法编码响应的方式与 encodeRequest() 方法编码请求的方式类似,这里就不再展开介绍了,可以翻源码查看.对于既不是 Request,也不是 Response 的消息,ExchangeCodec 会使用从父类继承下来的能力来编码,例如对 telnet 命令的编码.<br>
 
 ExchangeCodec 的 decode() 方法是 encode() 方法的逆过程,会先检查魔数,然后读取协议头和后续消息的长度,最后根据协议头中的各个标志位构造相应的对象,以及反序列化数据.在了解协议头结构的前提下,再去阅读这段逻辑就十分轻松了.<br>
+
+
+
+<br><br>
+## <font size="3">九. 一点总结</font>
+
