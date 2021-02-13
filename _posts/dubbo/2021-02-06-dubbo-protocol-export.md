@@ -32,9 +32,9 @@ tags:
 [![yY6Cz6.png](https://s3.ax1x.com/2021/02/06/yY6Cz6.png)](https://imgchr.com/i/yY6Cz6)
 
 其中,AbstractProtocol提供了一些 Protocol 实现需要的公共能力以及公共字段,它的核心字段有如下三个
-* exporterMap(Map<String, Exporter<?>>类型): 用于存储暴露的服务集合,其中的 Key 通过 ProtocolUtils.serviceKey() 方法创建的服务标识,在 ProtocolUtils 中维护了多层的 Map 结构(如下图所示).首先按照 group 分组,在实践中我们可以根据需求设置 group,例如,按照机房、地域等进行 group 划分,做到就近调用;在 GroupServiceKeyCache 中,依次按照 serviceName、serviceVersion、port 进行分类,最终缓存的 serviceKey 是前面三者拼接而成的
+* exporterMap(Map<String, Exporter<?>\>类型): 用于存储暴露的服务集合,其中的 Key 通过 ProtocolUtils.serviceKey() 方法创建的服务标识,在 ProtocolUtils 中维护了多层的 Map 结构(如下图所示).首先按照 group 分组,在实践中我们可以根据需求设置 group,例如,按照机房、地域等进行 group 划分,做到就近调用;在 GroupServiceKeyCache 中,依次按照 serviceName、serviceVersion、port 进行分类,最终缓存的 serviceKey 是前面三者拼接而成的
 [![yY6sw4.png](https://s3.ax1x.com/2021/02/06/yY6sw4.png)](https://imgchr.com/i/yY6sw4)
-* serverMap(Map<String, ProtocolServer>类型):记录了全部的 ProtocolServer 实例,其中的 Key 是 host 和 port 组成的字符串,Value 是监听该地址的 ProtocolServer.ProtocolServer 就是对 RemotingServer 的一层简单封装,表示一个服务端.
+* serverMap(Map<String, ProtocolServer>类型):记录了全部的 ProtocolServer 实例,其中的 Key 是 host 和 port 组成的字符串,Value 是监听该地址的 ProtocolServer. ProtocolServer 就是对 RemotingServer 的一层简单封装,表示一个服务端.
 * invokers(Set<Invoker<?>>类型): 服务引用的集合
 
 AbstractProtocol 没有对 Protocol 的 export() 方法进行实现,对 refer() 方法的实现也是委托给了 protocolBindingRefer() 这个抽象方法,然后由子类实现.AbstractProtocol 唯一实现的方法就是 destory() 方法,其首先会遍历 Invokers 集合,销毁全部的服务引用,然后遍历全部的 exporterMap 集合,销毁发布出去的服务,具体实现如下
@@ -102,7 +102,7 @@ public <T> Exporter<T> export(Invoker<T> invoker) throws RpcException {
 
 AbstractExporter 中维护了一个 Invoker 对象,以及一个 unexported 字段(boolean 类型),在 unexport() 方法中会设置 unexported 字段为 true,并调用 Invoker 对象的 destory() 方法进行销毁.<br>
 
-DubboExporter 也比较简单,其中会维护底层 Invoker 对应的 ServiceKey 以及 DubboProtocol 中的 exportMap 集合,在其 unexport() 方法中除了会调用父类 AbstractExporter 的 unexport() 方法之外,还会清理该 DubboExporter 实例在 exportMap 中相应的元素<br>
+DubboExporter 也比较简单,其中会维护底层 Invoker 对应的 ServiceKey 以及 DubboProtocol 中的 exporterMap 集合,在其 unexport() 方法中除了会调用父类 AbstractExporter 的 unexport() 方法之外,还会清理该 DubboExporter 实例在 exporterMap 中相应的元素<br>
 
 
 <br>
@@ -251,7 +251,7 @@ RpcInvocation 实现了 Invocation 接口,如下图所示
 [![yYoCrR.png](https://s3.ax1x.com/2021/02/06/yYoCrR.png)](https://imgchr.com/i/yYoCrR)
 
 下面是 RpcInvocation 中的核心字段,通过读写这些字段即可实现 Invocation 接口的全部方法:
-* targetServiceUniqueName(String类型): 要调用的唯一服务名称,其实就是 ServiceKey,即 interface/group:version 三部分构成的字符串
+* targetServiceUniqueName(String类型): 要调用的唯一服务名称,其实就是 ServiceKey,即 group/interface:version 三部分构成的字符串
 * methodName(String类型): 调用的目标方法名称
 * serviceName(String类型): 调用的目标服务名称,示例中就是org.apache.dubbo.demo.DemoService
 * parameterTypes(Class<?>[]类型): 记录了目标方法的全部参数类型
@@ -267,7 +267,7 @@ RpcInvocation 实现了 Invocation 接口,如下图所示
 在上面的继承图中看到 RpcInvocation 的一个子类----DecodeableRpcInvocation,它是用来支持解码的,其实现的 decode() 方法正好是 DubboCodec.encodeRequestData() 方法对应的解码操作,在 DubboCodec.decodeBody() 方法中就调用了这个方法,调用关系如下图所示
 [![yYqQ4x.png](https://s3.ax1x.com/2021/02/06/yYqQ4x.png)](https://imgchr.com/i/yYqQ4x)
 
-这个解码过程中有个细节,在 DubboCodec.decodeBody() 方法中有如下代码片段,其中会根据 DECODE_IN_IO_THREAD_KEY 这个参数决定是否在 DubboCodec 中进行解码(DubboCodec 是在 IO 线程中调用的)
+这个解码过程中有个细节,在 DubboCodec.decodeBody() 方法中有如下代码片段,其中会根据 DECODE_IN_IO_THREAD_KEY 这个参数决定是否在 DubboCodec 中进行**<font color="red">消息体解码</font>**(DubboCodec 是在 IO 线程中调用的),对于消息头,肯定是在IO线程中读取的(当然,消息头按字节位进行标记设置,不需要解码,只是按协议格式读取各位代表的信息即可)
 ```
 // decode request.
 Request req = new Request(id);
