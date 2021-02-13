@@ -475,7 +475,7 @@ private List<ReferenceCountExchangeClient> getSharedClient(URL url, int connectN
 
 这里使用的 ExchangeClient 实现是 ReferenceCountExchangeClient,它是 ExchangeClient 的一个装饰器,在原始 ExchangeClient 对象基础上添加了引用计数的功能.<br>
 
-ReferenceCountExchangeClient 中除了持有被修饰的 ExchangeClient 对象外,还有一个 referenceCount 字段(AtomicInteger 类型),用于记录该 Client 被应用的次数.从下图中我们可以看到,在 ReferenceCountExchangeClient 的构造方法以及 incrementAndGetCount() 方法中会增加引用次数,在 close() 方法中则会减少引用次数.<br>
+ReferenceCountExchangeClient 中除了持有被修饰的 ExchangeClient 对象外,还有一个 referenceCount 字段(AtomicInteger 类型),用于记录该 Client 被应用的次数.在 ReferenceCountExchangeClient 的构造方法以及 incrementAndGetCount() 方法中会增加引用次数,在 close() 方法中则会减少引用次数.<br>
 
 这样,于同一个地址的共享连接,就可以满足两个基本需求:
 * 当引用次数减到 0 的时候,ExchangeClient 连接关闭
