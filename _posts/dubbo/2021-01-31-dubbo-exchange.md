@@ -587,3 +587,5 @@ ExchangeCodec 的 decode() 方法是 encode() 方法的逆过程,会先检查魔
 <br><br>
 ## <font size="3">九. 一点总结</font>
 
+Exchange层抽象出了Request和Response语义,因此这层的逻辑是通过这两个语义实现的.
+[![yrmQKA.png](https://s3.ax1x.com/2021/02/12/yrmQKA.png)](https://imgchr.com/i/yrmQKA)

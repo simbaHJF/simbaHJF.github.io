@@ -79,6 +79,17 @@ public class DemoServiceImpl implements DemoService {
 
 这里的 DemoServiceImpl 类会被封装成为一个 AbstractProxyInvoker 实例,并新生成对应的 Exporter 实例.当 Dubbo Protocol 层收到一个请求之后,会找到这个 Exporter 实例,并调用其对应的 AbstractProxyInvoker 实例,从而完成 Provider 逻辑的调用.这里只先展示了两种invoker,dubbo 还有其他类型的invoker.<br>
 
+下面来看 Invoker 这个接口的具体定义,如下所示:
+```
+public interface Invoker<T> extends Node {
+    
+    // 服务接口
+    Class<T> getInterface();
+
+    // 进行一次调用，也有人称之为一次"会话"，你可以理解为一次调用
+    Result invoke(Invocation invocation) throws RpcException;
+}
+```
 
 <br>
 **<font size="3"> Invocation 接口 </font>** <br>
@@ -279,6 +290,8 @@ public interface ProxyFactory {
 ```
 
 看到 ProxyFactory 上的 @SPI 注解,我们知道其默认实现使用 javassist 来创建代码对象,当然,Dubbo 还提供了其他方式来创建代码,例如 JDK 动态代理.<br>
+
+ProtocolServer 接口是对RemotingServer 的一层简单封装,其实现也都非常简单,这里就不再展开.<br>
 
 
 <br>
