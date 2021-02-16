@@ -13,10 +13,7 @@ tags:
 
 ## 导航
 [一. RouterChain、RouterFactory 与 Router](#jump1)
-<br>
-[二. Cluster 架构](#jump2)
-<br>
-[三. Directory 接口详解](#jump3)
+
 
 
 
@@ -74,3 +71,18 @@ public List<Invoker<T>> route(URL url, Invocation invocation) {
     return finalInvokers;
 }
 ```
+
+了解了 RouterChain 的大致逻辑之后,我们知道真正进行路由的是 routers 集合中的 Router 对象.接下来我们再来看 RouterFactory 这个工厂接口,RouterFactory 接口是一个扩展接口,具体定义如下:
+```
+@SPI
+public interface RouterFactory {
+    @Adaptive("protocol") // 动态生成的适配器会根据protocol参数选择扩展实现
+    Router getRouter(URL url);
+}
+```
+
+RouterFactory 接口有很多实现类,如下图所示:
+[![yctzBq.png](https://s3.ax1x.com/2021/02/16/yctzBq.png)](https://imgchr.com/i/yctzBq)
+
+下面我们就来深入介绍下每个 RouterFactory 实现类以及对应的 Router 实现对象.Router 决定了一次 Dubbo 调用的目标服务,Router 接口的每个实现类代表了一个路由规则,当 Consumer 访问 Provider 时,Dubbo 根据路由规则筛选出合适的 Provider 列表,之后通过负载均衡算法再次进行筛选.Router 接口的继承关系如下图所示:
+
