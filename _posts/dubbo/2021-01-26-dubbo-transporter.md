@@ -90,7 +90,7 @@ AbstractServer 和 AbstractClient 都实现了 AbstractEndpoint 抽象类,我们
 AbstractServer 是对服务端的抽象,实现了服务端的公共逻辑.AbstractServer 的核心字段有下面几个
 * localAddress、bindAddress(InetSocketAddress 类型):分别对应该 Server 的本地地址和绑定的地址,都是从 URL 中的参数中获取.bindAddress 默认值与 localAddress 一致
 * accepts(int 类型):该 Server 能接收的最大连接数,从 URL 的 accepts 参数中获取,默认值为 0,表示没有限制
-* executorRepository(ExecutorRepository 类型):负责管理线程池,后面我们会深入介绍 ExecutorRepository 的具体实现
+* executorRepository(ExecutorRepository 类型):负责管理线程池
 * executor(ExecutorService 类型):当前 Server 关联的线程池,由上面的 ExecutorRepository 创建并管理
 
 在 AbstractServer 的构造方法中会根据传入的 URL初始化上述字段,并调用 doOpen() 这个抽象方法完成该 Server 的启动,具体实现如下
