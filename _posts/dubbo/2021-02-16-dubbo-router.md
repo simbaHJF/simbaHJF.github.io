@@ -108,3 +108,39 @@ ConditionRouter 是基于条件表达式的路由实现类,下面就是一条基
 ``
 host = 192.168.0.100 => host = 192.168.0.150
 ``
+
+在上述规则中,=>之前的为 Consumer 匹配的条件,该条件中的所有参数会与 Consumer 的 URL 进行对比,当 Consumer 满足匹配条件时,会对该 Consumer 的此次调用执行 => 后面的过滤规则.=> 之后为 Provider 地址列表的过滤条件,该条件中的所有参数会和 Provider 的 URL 进行对比,Consumer 最终只拿到过滤后的地址列表.<br>
+
+如果 Consumer 匹配条件为空,表示 => 之后的过滤条件对所有 Consumer 生效,例如:=> host != 192.168.0.150,含义是所有 Consumer 都不能请求 192.168.0.150 这个 Provider 节点.<br>
+
+如果 Provider 过滤条件为空,表示禁止访问所有 Provider,例如:host = 192.168.0.100 =>,含义是 192.168.0.100 这个 Consumer 不能访问任何 Provider 节点.<br>
+
+ConditionRouter 的核心字段有如下几个
+* url(URL 类型): 路由规则的 URL,可以从 rule 参数中获取具体的路由规则
+* ROUTE_PATTERN(Pattern 类型): 用于切分路由规则的正则表达式
+* priority(int 类型): 路由规则的优先级,用于排序,该字段值越大,优先级越高,默认值为 0
+* force(boolean 类型): 当路由结果为空时,是否强制执行.如果不强制执行,则路由结果为空的路由规则将会自动失效;如果强制执行,则直接返回空的路由结果
+* whenCondition(Map<String, MatchPair> 类型): Consumer 匹配的条件集合,通过解析条件表达式 rule 的 => 之前半部分,可以得到该集合中的内容
+* thenCondition(Map<String, MatchPair> 类型): Provider 匹配的条件集合,通过解析条件表达式 rule 的 => 之后半部分,可以得到该集合中的内容
+
+在 ConditionRouter 的构造方法中,会根据 URL 中携带的相应参数初始化 priority、force、enable 等字段,然后从 URL 的 rule 参数中获取路由规则进行解析,具体的解析逻辑是在 init() 方法中实现的,如下所示
+```
+public void init(String rule) {
+    // 将路由规则中的"consumer."和"provider."字符串清理掉
+    rule = rule.replace("consumer.", "").replace("provider.", "");
+    // 按照"=>"字符串进行分割，得到whenRule和thenRule两部分
+    int i = rule.indexOf("=>"); 
+    String whenRule = i < 0 ? null : rule.substring(0, i).trim();
+    String thenRule = i < 0 ? rule.trim() : rule.substring(i + 2).trim();
+    // 解析whenRule和thenRule，得到whenCondition和thenCondition两个条件集合
+    Map<String, MatchPair> when = StringUtils.isBlank(whenRule) || "true".equals(whenRule) ? new HashMap<String, MatchPair>() : parseRule(whenRule);
+    Map<String, MatchPair> then = StringUtils.isBlank(thenRule) || "false".equals(thenRule) ? null : parseRule(thenRule);
+    this.whenCondition = when;
+    this.thenCondition = then;
+}
+```
+
+whenCondition 和 thenCondition 两个集合中,Key 是条件表达式中指定的参数名称(例如 host = 192.168.0.150 这个表达式中的 host). ConditionRouter 支持三类参数:
+* 服务调用信息,例如,method、argument 等
+* URL 本身的字段,例如,protocol、host、port 等
+* URL 上的所有参数,例如,application 等
