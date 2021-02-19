@@ -13,7 +13,7 @@ tags:
 ## 导航
 [一. 负载均衡简介](#jump1)
 <br>
-[二. ConditionRouterFactory&ConditionRouter](#jump2)
+[二. LoadBalance 接口](#jump2)
 <br>
 [三. ConsistentHashLoadBalance](#jump3)
 <br>
