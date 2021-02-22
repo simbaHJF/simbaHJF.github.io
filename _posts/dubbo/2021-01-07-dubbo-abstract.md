@@ -15,9 +15,9 @@ tags:
 
 
 ## 导航
-一. [Dubbo架构](#jump1)
+[一. Dubbo架构](#jump1)
 <br>
-二. [Dubbo源码模块](#jump2)
+[二. Dubbo源码模块](#jump2)
 
 
 ## <span id="jump1">一. Dubbo架构</span>
