@@ -1,6 +1,6 @@
 ---
 layout:     post
-title:      "JVM--内存区域"
+title:      "JVM--内存管理"
 date:       2021-02-21 20:30:00 +0800
 author:     "simba"
 header-img: "img/post-bg-miui6.jpg"
@@ -20,7 +20,11 @@ tags:
 <br>
 [四. JAVA引用类型](#jump4)
 <br>
-[五. 可达性分析回收基本流程](#jump5)
+[五. 可达性分析中对象的生存死亡](#jump5)
+<br>
+[六. 分代收集](#jump6)
+<br>
+
 
 
 
@@ -57,6 +61,13 @@ tags:
 
 
 <br><br>
-## <span id="jump5">五. 可达性分析回收基本流程</span>
+## <span id="jump5">五. 可达性分析中对象的生存死亡</span>
 
-[![yHwfLd.png](https://s3.ax1x.com/2021/02/22/yHwfLd.png)](https://imgchr.com/i/yHwfLd)
+[![yL2Frq.png](https://s3.ax1x.com/2021/02/23/yL2Frq.png)](https://imgchr.com/i/yL2Frq)
+
+
+
+<br><br>
+## <span id="jump6">六. 分代收集</span>
+
+[![yLgKDP.png](https://s3.ax1x.com/2021/02/23/yLgKDP.png)](https://imgchr.com/i/yLgKDP)
