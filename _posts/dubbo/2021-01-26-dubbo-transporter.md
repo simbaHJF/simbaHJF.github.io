@@ -33,7 +33,7 @@ tags:
 
 AbstractPeer 中有四个字段:一个是表示该端点自身的 URL 类型的字段,还有两个 Boolean 类型的字段(closing 和 closed)用来记录当前端点的状态,这三个字段都与 Endpoint 接口相关;第四个字段指向了一个 ChannelHandler 对象,AbstractPeer 对 ChannelHandler 接口的所有实现,都是委托给了这个 ChannelHandler 对象.从上面的继承关系图中,我们可以得出这样一个结论:AbstractChannel、AbstractServer、AbstractClient 都是要关联一个 ChannelHandler 对象的.<br>
 
-<font color="red">讲道理我个人觉得端点实现ChannelHandler这种接口关系设计,比较不符合逻辑归属关系.小喷一嘴.<br></font>
+<font color="red">讲道理我觉得端点实现ChannelHandler这种接口关系设计,比较不符合逻辑归属关系.<br></font>
 
 
 <br>
