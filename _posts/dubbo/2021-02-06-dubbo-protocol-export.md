@@ -35,7 +35,7 @@ tags:
 * exporterMap(Map<String, Exporter<?>\>类型): 用于存储暴露的服务集合,其中的 Key 通过 ProtocolUtils.serviceKey() 方法创建的服务标识,在 ProtocolUtils 中维护了多层的 Map 结构(如下图所示).首先按照 group 分组,在实践中我们可以根据需求设置 group,例如,按照机房、地域等进行 group 划分,做到就近调用;在 GroupServiceKeyCache 中,依次按照 serviceName、serviceVersion、port 进行分类,最终缓存的 serviceKey 是前面三者拼接而成的
 [![yY6sw4.png](https://s3.ax1x.com/2021/02/06/yY6sw4.png)](https://imgchr.com/i/yY6sw4)
 * serverMap(Map<String, ProtocolServer>类型):记录了全部的 ProtocolServer 实例,其中的 Key 是 host 和 port 组成的字符串,Value 是监听该地址的 ProtocolServer. ProtocolServer 就是对 RemotingServer 的一层简单封装,表示一个服务端.
-* invokers(Set<Invoker<?>>类型): 服务引用的集合
+* invokers(Set<Invoker<?>\>类型): 服务引用的集合
 
 AbstractProtocol 没有对 Protocol 的 export() 方法进行实现,对 refer() 方法的实现也是委托给了 protocolBindingRefer() 这个抽象方法,然后由子类实现.AbstractProtocol 唯一实现的方法就是 destory() 方法,其首先会遍历 Invokers 集合,销毁全部的服务引用,然后遍历全部的 exporterMap 集合,销毁发布出去的服务,具体实现如下
 ```
