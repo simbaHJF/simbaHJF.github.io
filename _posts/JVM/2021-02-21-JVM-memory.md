@@ -26,7 +26,7 @@ tags:
 <br>
 [七. 三色标记算法](#jump7)
 <br>
-
+[八. HotSpot虚拟机垃圾收集器](#jump8)
 
 
 
@@ -191,3 +191,11 @@ CMS(Concurrent Mark Sweep)收集器是一种以获得最短回收停顿时间为
 CMS基于标记-清除算法实现,会产生内存碎片.空间碎片过多时,会给大对象分配带来很大麻烦,往往会出现老年代还有很多剩余空间,但就是无法找到足够大的连续空间来分配当前对象,而不得不提前触发一次Full GC的情况.为了解决这个问题,CMS收集器提供了一个-XX:+UseCMSCompactAtFullCollection开关参数(默认开启,此参数从JDK9开始废弃),用于在CMS收集器不得不进行Full GC时开启内存碎片的合并整理过程,由于这个内存整理过程必须移动存活对象,(在shenandoah和ZGC出现前)是无法并发的.这样空间碎片问题是解决了,但停顿时间又会变长,因此虚拟机提供了另外一个参数:"-XX:CMSFullGCsBeforeCompaction"(JDK9开始废弃),这个参数的作用是要求CMS收集器在执行过若干次(数量由参数值决定)不整理空间的Full GC之后,下一次进入Full GC前会先进行碎片整理(默认0,表示每次进入Full GC时都进行碎片整理),也就是MSC,MSC的全称是Mark Sweep Compact,即标记-清理-压缩,MSC是一种算法,请注意Compact,即它会压缩整理堆,这一点很重要<br>
 
 注意这里"-XX:CMSFullGCsBeforeCompaction"标记的是Full GC次数,而不是CMS GC次数,这个要区分清.CMS GC是针对老年代的GC,不同于Full GC.而老年采用CMS收集器时,如果发生了需要进行Full GC的情况,这时是会退化到后备预案启用Serial Old来进行的,也就是单线程,全程STW.<br>
+
+
+<br>
+**<font size="4">Garbage First收集器</font>**<br>
+
+以停顿时间可控为目标的收集器,面向局部收集的设计思路和基于Region的内存布局形式.<br>
+
+G1出现之前的所有收集器,包括CMS在内,垃圾收集的目标范围要么是整个新生代(Minor GC),要么就是整个老年代(Major GC),再要么就是整个Java堆(Full GC,当然Full GC包括了方法区).G1突破了这个限制,它可以面向堆内存任何部分来组成回收集(Collection Set,一般简称CSet)进行回收,衡量标准不再是它属于哪个分代,而是哪块内存中存放的垃圾数量最多,回收收益最大,这就是G1收集器的**<font color="red">Mixed GC模式</font>**
