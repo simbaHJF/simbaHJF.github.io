@@ -27,6 +27,9 @@ tags:
 [七. 三色标记算法](#jump7)
 <br>
 [八. HotSpot虚拟机垃圾收集器](#jump8)
+<br>
+[九. Shenandoah收集器](#jump9)
+<br>
 
 
 
@@ -125,20 +128,20 @@ tags:
 
 
 <br>
-**<font size="4">Serial</font>**<br>
+**<font size="5">Serial</font>**<br>
 
 [![69XKOg.png](https://s3.ax1x.com/2021/02/28/69XKOg.png)](https://imgtu.com/i/69XKOg)
 
 
 <br>
-**<font size="4">Serial Old</font>**<br>
+**<font size="5">Serial Old</font>**<br>
 
 Serial收集器的老年代版本,也可作为CMS收集器发生失败时的后备预案,在并发收集发生Concurrent Mode Failure时使用.
 [![69XKOg.png](https://s3.ax1x.com/2021/02/28/69XKOg.png)](https://imgtu.com/i/69XKOg)
 
 
 <br>
-**<font size="4">ParNew</font>**<br>
+**<font size="5">ParNew</font>**<br>
 
 [![69XLjS.png](https://s3.ax1x.com/2021/02/28/69XLjS.png)](https://imgtu.com/i/69XLjS)
 
@@ -148,7 +151,7 @@ Serial的并行版本.<br>
 
 
 <br>
-**<font size="4">Parallel Scavenge</font>**<br>
+**<font size="5">Parallel Scavenge</font>**<br>
 
 新生代收集器,同样是基于标记-复制算法实现的收集器,也是能够并行收集的多线程收集器.<br>
 
@@ -161,14 +164,14 @@ CMS等收集器的关注点是尽可能的缩短垃圾收集时用户线程的�
 
 
 <br>
-**<font size="4">Parallel Old</font>**<br>
+**<font size="5">Parallel Old</font>**<br>
 
 Parallel Old是Parallel Scavenge收集器的老年代版本,支持多线程并发收集,基于标记-整理算法实现.
 [![6CpN11.png](https://s3.ax1x.com/2021/02/28/6CpN11.png)](https://imgtu.com/i/6CpN11)
 
 
 <br>
-**<font size="4">CMS 收集器</font>**
+**<font size="5">CMS 收集器</font>**
 
 CMS(Concurrent Mark Sweep)收集器是一种以获得最短回收停顿时间为目标的收集器.基于标记-清除算法实现,运作过程分四个阶段:
 * 初始标记 ----- 只标记一下GC Roots能直接关联到的对象,速度很快,可以理解为就是前面讲的"根节点枚举",需要STW
@@ -194,7 +197,7 @@ CMS基于标记-清除算法实现,会产生内存碎片.空间碎片过多时,�
 
 
 <br>
-**<font size="4">Garbage First收集器</font>**<br>
+**<font size="5">Garbage First收集器</font>**<br>
 
 以停顿时间可控为目标的收集器,面向局部收集的设计思路和基于Region的内存布局形式.收集整体是使用"标记-整理",Region之间基于"复制"算法,GC后会将存活对象复制到可用分区(未分配的分区),所以不会产生空间碎片.<br>
 
@@ -212,7 +215,7 @@ G1 GC 分类:
 * Mixed GC ----- 回收所有的年轻代的Region + 部分老年代的Region.
 	* 触发条件:一次YoungGc之后,老年代占据堆内存(包括old+humongous)的百分占比超过InitiatingHeapOccupancyPercent(默认45%)时,超过这个值就会触发Mixed GC.
 	* 为何是部分老年代的Region: 通过"停顿预测模型"来预测本次收集的Region,对回收收益高的的Region进行回收以贴近用户设定的目标停顿时间.
-* Full GC ----- G1的垃圾回收过程是和应用程序并发执行的,当Mixed GC的速度赶不上应用程序申请内存的速度的时候,Mixed G1就会降级到Full GC.开始版本Full GC使用的是单线程的Serial Old模式,会导致长时间的STW,JDK10以后,Full GC已经是并行运行,但是仍然要避免Full GC.
+* Full GC ----- G1的垃圾回收过程是和应用程序并发执行的,当Mixed GC的速度赶不上应用程序申请内存的速度的时候,Mixed G1就会降级到Full GC.开始版本Full GC使用的是单线程的Serial Old模式,会导致长时间的STW,JDK10以后,Full GC已经是并行运行,但是仍然要避免Full GC,注意这里并行是指回收线程并行,但仍不能与用户线程同时并发执行.
 
 
 G1的几个关键问题:
@@ -242,3 +245,73 @@ G1与CMS的对比:<br>
 弱项:
 * 内存占用高于CMS
 * 额外执行负载高于CMS
+
+
+<br>
+**<font size="5">Shenandoah 收集器</font>**<br>
+
+OpenJDK12中可以使用,OracleJDK中不支持.但Shenandoah收集器才更像G1的继承者.<br>
+
+其目标是实现一种在任何堆内存大小下都可以把垃圾收集的停顿时间限制在十毫秒以内的垃圾收集器,该目标意味着相比CMS和G1,Shenandoah不仅要进行并发的垃圾标记,还要并发地进行对象清理后的整理动作.<br>
+
+Shenandoah也是基于Region的堆内存布局,同样有着用于存放大对象的Humongous Region,默认回收策略也同样是优先处理回收价值最大的Region.<br>
+
+Shenandoah对G1的改进:
+* 支持并发的整理算法 ----- 读屏障和"Brooks Pointers(转发指针)"
+* 默认不适用分代收集,换言之,不会有专门的新生代Region或者老年代Region存在,没有实现分代并不是说分代对Shenandoah没有价值,更多是处于性价比的权衡,将其放在优先级较低的工作中.
+* 摒弃了G1中耗费大量内存和计算资源去维护的记忆集,改用名为"连接矩阵(Connection Matrix)"的全局数据结构来记录跨Region的引用关系.
+
+连接矩阵原理示意图:
+[![6FdhJx.png](https://s3.ax1x.com/2021/03/02/6FdhJx.png)](https://imgtu.com/i/6FdhJx)
+
+
+Shenandoah收集器的工作过程大致可分为以下九个阶段:
+* 初始标记: 同G1,首先标记与GC Roots直接关联的对象,可理解为根节点枚举,STW.停顿时间与堆大小无关,至于GC Roots数量有关(得益于Oop Map)
+* 并发标记: 同G1,遍历图对象,与用户线程并发,耗时长短取决于堆中存活对象的数量及对象图的结构复杂程度
+* 最终标记: 同G1,处理SATB扫描,并在这个阶段统计出回收价值最高的Region,构成回收集(Collection Set,CSet).短暂STW
+* 并发清理: 与G1有区别,该阶段用于清理那些整个区域内一个存活对象都没找到的Region
+* 并发回收: Shenandoah与之前其他HotSpot收集器的核心差异.把回收集中的存活对象复制一份到其他未被使用的Region之中,与用户线程并发执行.对于与用户线程并发的新旧引用地址问题,通过读屏障和"Brooks Pointers(转发指针)"来解决
+* 初始引用更新: 把堆中所有指向旧对象的引用修正到复制后的新地址,这个操作称为"引用更新".该阶段其实没做具体处理,只是建立一个线程集合点,确保所有并发回收阶段中进行的收集器线程都已完成对象移动任务.会产生一个非常短暂的STW
+* 并发引用更新: 真正开始进行引用更新操作,与用户线程并发.
+* 最终引用更新: 解决完堆中的引用更新之后,还要修正存在于GC Roots中的引用.这个阶段是Shenandoah最后一次STW,停顿时间至于GC Roots的数量有关.
+* 并发清理: 经过并发回收和引用更新之后,整个回收集中所有的Region已再无存活对象,最后再调用一次并发清理过程来回收这些Region的内存空间,供以后新对象分配使用
+
+**<font color="red">其中三个重要并发阶段: 并发标记、并发回收、并发引用更新</font>**
+
+
+Shenandoah在实际应用中的测试数据:(使用ElasticSearch对200G维基百科数据进行索引)
+[![6FsRTe.png](https://s3.ax1x.com/2021/03/02/6FsRTe.png)](https://imgtu.com/i/6FsRTe)
+
+停顿时间有了质的飞跃,但未实现最大停顿控制在十毫秒下的目标,而吞吐量方面出现了明显下降.<br>
+
+因此可看出Shenandoah的弱项:高运行负担使得吞吐量下降;强项:低延迟时间
+
+
+<br>
+**<font size="5">ZGC 收集器</font>**<br>
+
+ZGC和Shenandoah的目标是高度相似的,都希望在尽可能对吞吐量影响不太大的前提下,实现在任意堆内存大小下都可以把垃圾收集的停顿时间限制在十毫秒以内的低延迟.<br>
+
+ZGC收集器是一款基于Region内存布局的,(暂时)不设分代的,使用了读屏障、染色指针和内存多重映射等技术来实现可并发的标记-整理算法的,以低延迟为首要目标的一块垃圾收集器.<br>
+
+内存布局方面,ZGC与Shenandoah和G1一样,也采用Region的堆内存布局,但不同的是,ZGC的Region(一些官方资料中将它称为Page和ZPage)具有动态性 ----- 动态创建和销毁,以及动态的区域容量大小.<br>
+
+X64硬件平台下,ZGC的Region可具有大、中、小三类容量:
+* 小型Region: 容量固定2MB,用于防止小于256KB的小对象
+* 中型Region: 容量固定32MB,用于防止大于等于256KB,但小于4MB的对象
+* 大型Region: 容量不固定可动态变化,但必须为2MB的整数倍,用于放置4MB以上大对象.每个大型Region只会存放一个大对象.大型Region的实际容量完全可能小于中型Region,最小容量可低至4MB.大型Region在ZGC的实现中不会被重新分配,因为复制一个大对象的代价非常高.
+
+
+并发整理算法实现方面,读屏障 + 染色指针技术.<br>
+
+染色指针直接把标记信息记载引用对象的指针上,这时,与其说可达性分析是遍历对象,还不如说是遍历"引用图"来标记引用.<br>
+
+染色指针可以大幅减少在垃圾手机过程中内存屏障的使用数量.<br>
+
+ZGC的运作过程大致可划分为四个大的阶段,全部四个阶段都是可以并发执行的,仅是两个阶段中间会存在短暂停顿的小阶段:
+[![6kmabF.png](https://s3.ax1x.com/2021/03/02/6kmabF.png)](https://imgtu.com/i/6kmabF)
+
+* 并发标记: 与G1和Shenandoah一样,做可达性分析,前后也要经过类似的初始标记,最终标记(尽管ZGC中的名字不叫这些)的短暂停顿.不同的是ZGC的标记是在指针上而不是在对象上进行的
+* 并发预备重分配: 根据特定查询条件统计要清理的Region,组成重分配集(Relocation Set).重分配集与G1收集器的回收集(Collection Set)还是有区别的,ZGC划分Region的目的并非为了像G1那样做收益优先的增量回收.相反,ZGC每次回收都会扫描所有的Region,用范围更大的扫描成本换取省去G1中记忆集的维护成本.因此,ZGC的重分配集只是决定了里面的存活对象会被重新复制到其他的Region,重分配集里面的Region会被释放,而并不能说回收行为就只是针对这个集合里面的Region进行,因为标记过程是针对全堆的
+* 并发重分配: 重分配是ZGC执行过程中的核心阶段,这个过程要把重分配集合中的存活对象复制到新的Region上,并为重分配集中的每个Region维护一个转发表,记录从旧对象到新对象的转向关系.得益于染色指针的支持,ZGC收集器能仅从引用上就明确得知一个对象是否处于重分配集中,如果用户线程此时并发访问了位于重分配集中的对象,这次访问将会被预置的内存屏障所截获,然后立即根据Region上的转发表将访问转发到新复制的对象,并同时修正更新该引用的值,使其直接指向新对象,ZGC将这种行为称为指针的"自愈"能力.这样做的好处是只有第一次访问旧对象会陷入转发,也就是只慢一次,对比Shenandoah的Brooks转发指针,那是每次对象访问都必须付出的固定开销,简单地说就是每次都慢,因此ZGC对用户程序的运行时负载要比Shenandoah来的更低一些.还有另外一个直接的好处是由于染色指针的存在,一旦重分配集中某个Region的存活对象都复制完毕后,这个Region就可以立即释放用于新对象的分配(但是转发表还得留着不能释放掉),哪怕堆中还有很多指向这个对象的未更新指针也没有关系,这些旧指针一旦被使用,它们都是可以自愈的.
+* 并发重映射
