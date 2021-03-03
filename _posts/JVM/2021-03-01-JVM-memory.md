@@ -28,7 +28,7 @@ tags:
 <br>
 [八. HotSpot虚拟机垃圾收集器](#jump8)
 <br>
-[九. Shenandoah收集器](#jump9)
+[九. 低延迟垃圾垃圾收集器](#jump9)
 <br>
 
 
@@ -246,6 +246,10 @@ G1与CMS的对比:<br>
 * 内存占用高于CMS
 * 额外执行负载高于CMS
 
+
+
+<br><br>
+## <span id="jump9">九. 低延迟垃圾垃圾收集器</span>
 
 <br>
 **<font size="5">Shenandoah 收集器</font>**<br>
