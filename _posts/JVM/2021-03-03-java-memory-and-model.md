@@ -18,7 +18,7 @@ tags:
 <br>
 [三. volatile](#jump3)
 <br>
-[四. JAVA引用类型](#jump4)
+[四. 线程状态](#jump4)
 <br>
 
 

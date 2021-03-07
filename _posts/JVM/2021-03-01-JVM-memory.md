@@ -261,9 +261,9 @@ OpenJDK12中可以使用,OracleJDK中不支持.但Shenandoah收集器才更像G1
 Shenandoah也是基于Region的堆内存布局,同样有着用于存放大对象的Humongous Region,默认回收策略也同样是优先处理回收价值最大的Region.<br>
 
 Shenandoah对G1的改进:
-* 支持并发的整理算法 ----- 读屏障和"Brooks Pointers(转发指针)"
-* 默认不适用分代收集,换言之,不会有专门的新生代Region或者老年代Region存在,没有实现分代并不是说分代对Shenandoah没有价值,更多是处于性价比的权衡,将其放在优先级较低的工作中.
-* 摒弃了G1中耗费大量内存和计算资源去维护的记忆集,改用名为"连接矩阵(Connection Matrix)"的全局数据结构来记录跨Region的引用关系.
+* 支持并发的整理算法 ----- <font color="red">读屏障和"Brooks Pointers(转发指针)"</font>
+* 默认不使用分代收集,换言之,不会有专门的新生代Region或者老年代Region存在,没有实现分代并不是说分代对Shenandoah没有价值,更多是处于性价比的权衡,将其放在优先级较低的工作中.
+* 摒弃了G1中耗费大量内存和计算资源去维护的记忆集,改用名为"<font color="red">连接矩阵(Connection Matrix)</font>"的全局数据结构来记录跨Region的引用关系.
 
 连接矩阵原理示意图:
 [![6FdhJx.png](https://s3.ax1x.com/2021/03/02/6FdhJx.png)](https://imgtu.com/i/6FdhJx)
@@ -288,7 +288,7 @@ Shenandoah在实际应用中的测试数据:(使用ElasticSearch对200G维基百
 
 停顿时间有了质的飞跃,但未实现最大停顿控制在十毫秒下的目标,而吞吐量方面出现了明显下降.<br>
 
-因此可看出Shenandoah的弱项:高运行负担使得吞吐量下降;强项:低延迟时间
+因此可看出  <font color="red">Shenandoah的弱项:高运行负担使得吞吐量下降;强项:低延迟时间</font>
 
 
 <br>
@@ -300,17 +300,17 @@ ZGC收集器是一款基于Region内存布局的,(暂时)不设分代的,使用�
 
 内存布局方面,ZGC与Shenandoah和G1一样,也采用Region的堆内存布局,但不同的是,ZGC的Region(一些官方资料中将它称为Page和ZPage)具有动态性 ----- 动态创建和销毁,以及动态的区域容量大小.<br>
 
-X64硬件平台下,ZGC的Region可具有大、中、小三类容量:
+X64硬件平台下,<font color="red">ZGC的Region可具有大、中、小三类容量</font>:
 * 小型Region: 容量固定2MB,用于防止小于256KB的小对象
 * 中型Region: 容量固定32MB,用于防止大于等于256KB,但小于4MB的对象
 * 大型Region: 容量不固定可动态变化,但必须为2MB的整数倍,用于放置4MB以上大对象.每个大型Region只会存放一个大对象.大型Region的实际容量完全可能小于中型Region,最小容量可低至4MB.大型Region在ZGC的实现中不会被重新分配,因为复制一个大对象的代价非常高.
 
 
-并发整理算法实现方面,读屏障 + 染色指针技术.<br>
+<font color="red">并发整理算法实现方面,读屏障 + 染色指针技术 + 转发表(处理引用问题,可指针"自愈")</font> <br>
 
 染色指针直接把标记信息记载引用对象的指针上,这时,与其说可达性分析是遍历对象,还不如说是遍历"引用图"来标记引用.<br>
 
-染色指针可以大幅减少在垃圾手机过程中内存屏障的使用数量.<br>
+<font color="red">为什么使用染色指针: 染色指针可以大幅减少在垃圾收集过程中内存屏障的使用数量.</font> <br>
 
 ZGC的运作过程大致可划分为四个大的阶段,全部四个阶段都是可以并发执行的,仅是两个阶段中间会存在短暂停顿的小阶段:
 [![6kmabF.png](https://s3.ax1x.com/2021/03/02/6kmabF.png)](https://imgtu.com/i/6kmabF)
