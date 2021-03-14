@@ -232,6 +232,8 @@ Redis使用跳跃表作为有序集合键的底层实现之一,如果一个有�
 <br>
 **<font size="4">字符串对象</font>** <br>
 
+SDS
+
 <br>
 **<font size="4">列表对象</font>** <br>
 
