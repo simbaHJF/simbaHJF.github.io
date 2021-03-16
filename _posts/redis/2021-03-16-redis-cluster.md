@@ -1,0 +1,165 @@
+---
+layout:     post
+title:      "redis cluster"
+date:       2021-03-16 14:40:00 +0800
+author:     "simba"
+header-img: "img/post-bg-miui6.jpg"
+tags:
+    - redis
+
+---
+
+
+
+## 导航
+[一. 节点](#jump1)
+<br>
+[二. 槽指派](#jump2)
+<br>
+[三. 检测客观下线状态](#jump3)
+<br>
+[四. 选举领头Sentinel](#jump4)
+<br>
+
+
+
+
+
+
+
+
+<br><br>
+## <span id="jump1">一. 节点</span>
+
+一个Redis集群通常由多个节点(node)组成,在刚开始的时候,每个节点都是相互独立的,它们都处于一个只包含自己的集群当中,要组建一个真正可工作的集群,我们必须将各个独立的节点连接起来,构成一个包含多个节点的集群.<br>
+
+连接各个节点的工作可以使用 CLUSTER MEET 命令来完成,格式如下:<br>
+``
+CLUSTER MEET <ip> <port>
+``
+
+向一个节点node发送 CLUSTER MEET 命令,可以让node节点与ip和port所指定的节点进行握手(handshake),当握手成功时,node节点就会将ip和port所指定的节点添加到node节点当前所在的集群中.<br>
+
+* 三个独立的节点
+[![6ssGMn.png](https://s3.ax1x.com/2021/03/16/6ssGMn.png)](https://imgtu.com/i/6ssGMn)
+
+* 节点7000和7001进行握手
+[![6ssYq0.png](https://s3.ax1x.com/2021/03/16/6ssYq0.png)](https://imgtu.com/i/6ssYq0)
+
+* 握手成功的7000与7001处于同一个集群
+[![6ssDz9.png](https://s3.ax1x.com/2021/03/16/6ssDz9.png)](https://imgtu.com/i/6ssDz9)
+
+* 节点7000与节点7002进行握手
+[![6ss6qx.png](https://s3.ax1x.com/2021/03/16/6ss6qx.png)](https://imgtu.com/i/6ss6qx)
+
+* 握手成功的三个节点处于同一个集群
+[![6ssgZ6.png](https://s3.ax1x.com/2021/03/16/6ssgZ6.png)](https://imgtu.com/i/6ssgZ6)
+
+
+<br>
+**<font size="4">集群数据结构</font>** <br>
+
+* clusterNode结构保存了一个节点的当前状态 ----- 每个节点都会使用一个clusterNode结构来记录自己的状态,并为集群中的所有其他节点(包括主节点和从节点)都创建一个相应的clusterNode结构,以此来记录其他节点的状态
+* clusterState结构,每个节点都会保存着一个该结构数据,它记录了在当前节点的视角下,集群目前所处的状态.
+
+
+
+<br><br>
+## <span id="jump2">二. 槽指派</span>
+
+Redis集群通过分片的方式来保存数据库中的键值对:集群的整个数据库被分为16384个槽(slot),数据库中的每个键都属于这16384个槽的其中一个,集群中的每个节点可以处理0个或最多16384个槽.<br>
+
+当数据库中的16384个槽都有节点在处理时,集群处于上线状态(ok);相反地,如果数据库中有任何一个槽没有得到处理,那么集群处于下线状态(fail).<br>
+
+通过向节点发送"CLUSTER ADDSLOTS"命令,我们可以将一个或多个槽指派(assign)给节点负责:<br>
+``
+CLUSTER ADDSLOTS <slot> [slot ...]
+``
+
+
+<br>
+**<font size="4">记录节点的槽指派信息</font>** <br>
+
+clusterNode结构的slots属性和numslot属性记录了节点负责处理那些槽.<br>
+
+slots属性是一个二进制位数组(bit array),这个数组的长度为16384/8=2048个字节,共包含16384个二进制位.Redis以0位起始索引,16383为终止索引,对slots数组中的16384个二进制位进行编号,并根据索引i上的二进制位的值来判断节点是否负责处理槽i:
+* 如果slots数组在索引i上的二进制位的值为1,那么表示节点负责处理槽i
+* 如果slots数组在索引i上的二进制位的值为0,那么表示节点不负责处理槽i
+
+numslots属性则记录节点负责处理的槽的数量
+
+<font color="red">clusterNode中的slots二进制位数组,只用在向别的节点传播自己的槽位信息时候用,这样比较快速,直接发送这个数组信息即可</font>
+
+
+<br>
+**<font size="4">传播节点的槽指派信息</font>** <br>
+
+一个节点除了会将自己负责处理的槽记录在clusterNode结构的slots属性和numslots属性之外,他还会将自己的slots数组通过消息发送给集群中的其他节点,以此来告知其他节点自己目前负责处理哪些槽.<br>
+
+当节点A通过消息从节点B那里接收到节点B的slots数组时,节点A会在自己的clusterState.nodes字典中查找节点B对应的clusterNode结构,并对结构中的slots数组进行保存或者更新.<br>
+
+因为集群中的每个节点都会将自己的slots数组通过消息发送给集群中的其他节点,并且每个接收到slots数组的节点都会将数组保存到相应节点的clusterNode结构里面,因此,集群中的每个节点都会知道数据库中的16384个槽分别被指派给了集群中哪些节点.<br>
+
+
+
+<br><br>
+## <span id="jump3">三. 在集群中执行命令</span>
+
+在对数据库中的16384个槽都进行了指派之后,集群就会进入上线状态,这时客户端就可以向集群中的节点发送数据命令了.<br>
+
+当客户端向节点发送与数据库键有关的命令时,接受命令的节点会计算出命令要处理的数据库键属于哪个槽,并检查这个槽是否指派给了自己:
+* 如果键所在的槽正好就指派给了当前节点,那么节点直接执行这个命令
+* 如果键所在的槽并没有指派给当前节点,那么节点会向客户端返回一个MOVED错误,指引客户转向(redirect)至正确的节点,并再次发送之前想要执行的命令
+[![6sx7Xd.png](https://s3.ax1x.com/2021/03/16/6sx7Xd.png)](https://imgtu.com/i/6sx7Xd)
+
+
+<br>
+**<font size="4">计算键属于哪个槽</font>** <br>
+
+```
+def slot_number(key):
+	return CRC16(key) & 16383
+```
+
+其中CRC16(key)语句用于计算键key的CRC-16校验和
+
+
+<br>
+**<font size="4">判断槽是否由当前节点负责处理</font>** <br>
+
+当节点计算出键所属的槽i之后,节点就会检查自己在clusterState.slots数组中的项i,判断键所在的槽是否由自己负责:
+* 如果clusterState.slots[i]等于clusterState.myself,那么说明槽i由当前节点负责,节点可以执行客户端发送的命令
+* 如果clusterState.slots[i]不等于clusterState.myself,那么说明槽i并非由当前节点负责,节点会根据clusterState.slots[i]指向的clusterNode结构所记录的节点IP和端口号,向客户端返回MOVED错误,指引客户端转向至正在处理槽i的节点
+
+
+<br>
+**<font size="4">MOVED错误</font>** <br>
+
+当节点发现键所在的槽并非由自己负责处理的时候,节点就会向客户端返回一个MOVED错误,指引客户端转向至正在负责槽的节点.<br>
+
+MOVED错误的格式为:<br>
+``
+MOVED <slot> <ip>:<port>
+``
+
+其中slot为键所在的槽,而ip和port则是负责处理槽slot的节点的IP地址和端口号.<br>
+
+当客户端接收到节点返回的MOVED错误时,客户端会根据MOVED错误中提供的IP地址和端口号,转向至负责处理槽slot的节点,并向该节点重新发送之前想要执行的命令.<br>
+
+
+<br>
+**<font size="4">节点数据库的实现</font>** <br>
+
+集群节点保存键值对以及键值对过期时间的方式,与单机Redis服务器的方式完全相同.节点和单机服务器在数据库方面的一个区别是,节点只能使用0号数据库,而单机Redis服务器则没有这一限制.<br>
+
+
+
+<br><br>
+## <span id="jump4">四. 重新分片</span>
+
+Redis集群的重新分片操作可以将任意数量已经指派给某个节点(源节点)的槽改为指派给另一个节点(目标节点),并且相关槽所属的键值对也会从源节点被移动到目标节点.<br>
+
+重新分片操作可以在线(online)进行,在重新分片的过程中,集群不需要下线,并且源节点和目标节点都可以继续处理命令请求.<br>
+
+Redis集群的重新分片操作是由Redis的集群管理软件redis-trib负责执行的,Redis提供了进行重新分片所需的所有命令,而redis-trib则通过向源节点和目标节点发送命令来进行重新分片操作
+[![6yE8L8.png](https://s3.ax1x.com/2021/03/16/6yE8L8.png)](https://imgtu.com/i/6yE8L8)
