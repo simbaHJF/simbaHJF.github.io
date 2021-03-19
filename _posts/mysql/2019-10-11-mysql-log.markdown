@@ -11,7 +11,32 @@ tags:
 
 > 极客时间--丁奇--mysql实战 学习笔记
 
-##	redo log
+## 导航
+[一. redo log](#jump1)
+<br>
+[二. binlog](#jump2)
+<br>
+[三. 更新语句的执行过程](#jump3)
+<br>
+[四. binlog的写入机制](#jump4)
+<br>
+[五. redo log的写入机制](#jump5)
+<br>
+[六. 小结](#jump6)
+<br>
+
+
+
+
+
+
+
+
+
+
+<br><br>
+## <span id="jump1">一. redo log</span>
+
 redo log是InnoDB引擎特有的日志,InnoDB通过redo log来保证crash-safe.
 
 redo log是物理日志,记录的是"在某个数据页上做了什么修改".
@@ -23,14 +48,20 @@ InnoDB的redo log是固定大小的,比如可以配置为一组4个文件,每个
 write pos是当前记录的位置,一边写以便后移,写到第3号文件末尾后就回到0号文件开头.checkpoint是当前要擦除的位置,也是往后推移并且循环的,擦除记录前要把记录更新到磁盘.
 
 
-##	binlog
+
+<br><br>
+## <span id="jump2">二. binlog</span>
+
 binlog是mysql的server层日志.最开始mysql没有InnoDB引擎,它的自带引擎是MyISAM,但是MyISAM没有crash-safe能力,binlog日志只能用于归档.
 
 binlog是逻辑日志,记录的是这个语句的原始逻辑,比如"给ID=2这一行的c字段加1".
 
 binlog是追加写入的,binlog文件写到一定大小后会切换到下一个,并不会覆盖以前的日志.
 
-##	更新语句的执行过程
+
+
+<br><br>
+## <span id="jump3">三. 更新语句的执行过程</span>
 ```
 update T set c=c+1 where ID=2;
 ```
@@ -47,14 +78,18 @@ update T set c=c+1 where ID=2;
 上述执行过程将redo log的写入拆成了两个步骤:prepare和commit,这就是"两阶段提交".
 
 
-##	怎样让数据库恢复到半个月内任意一秒的状态
+<br>
+**<font size="4">怎样让数据库恢复到半个月内任意一秒的状态</font>** <br>
 当需要恢复到指定的某一秒时,比如某天下午两点发现中午十二点有一次误删表,需要找回数据,那么可以这么做:
 *	首先找到最近的一次全量备份,从这个备份恢复到临时库
 *	然后,从备份的时间点开始,将备份的binlog依次取出来,重放到中午误删表之前的那个时刻.
 
 
-##	binlog的写入机制
-事务执行过程中,先把日写到binlog cache,事务提交的时候,再把binlog cache写到binlog文件中.一个事务的binlog是不能被拆开的,因此不论这个事务多大,也要确保一次性写入.这就涉及到了binlog cache的保存问题.系统给binlog cache分配了一片内存,每个线程一个,参数binlog_cache_size用于控制单个线程内binlog cache所占内存的大小.如果超过了这个参数规定的大小,就要暂存到磁盘.
+
+<br><br>
+## <span id="jump4">四. binlog的写入机制</span>
+
+事务执行过程中,先把日写到binlog cache,事务提交的时候,再把binlog cache写到binlog文件中.一个事务的binlog是不能被拆开的,因此不论这个事务多大,也要确保一次性写入.这就涉及到了binlog cache的保存问题.系统给binlog cache分配了一片内存,每个线程一个,参数binlog_cache_size用于控制单个线程内binlog cache所占内存的大小.如果超过了这个参数规定的大小,就要暂存到磁盘.<br>
 
 事务提交的时候,执行器把binlog cache里的完整事务写到binlog中,并清空binlog cache.状态如图1所示:
 ![uL9HgK.png](https://s2.ax1x.com/2019/10/11/uL9HgK.png)
@@ -68,10 +103,14 @@ write和fsync的时机,是由参数sync_binlog控制的:
 *	sync_binlog=1的时候,表示每次提交事务都会执行fsync;
 *	sync_binlog=N(N>1)的时候,表示每次提交事务都write,但积累N个事务后才fsync.
 
-因此,在出现IO瓶颈的场景里,将sync_binlog设置成一个比较大的值,可以提升性能.在实际的业务场景中,考虑到丢失日志量的可控性,一般不建议将这个参数设成0,比较常见的是将其设置为100~1000中的某个值.但是将sync_binlog设置为N,对应的风险是:如果主机发生异常重启,会丢失最近N个事务的binlog日志.所以,在即使主机宕机,也不允许发生事务丢失的场景下,该参数应当设置为1.
+
+因此,在出现IO瓶颈的场景里,将sync_binlog设置成一个比较大的值,可以提升性能.在实际的业务场景中,考虑到丢失日志量的可控性,一般不建议将这个参数设成0,比较常见的是将其设置为100\~1000中的某个值.但是将sync_binlog设置为N,对应的风险是:如果主机发生异常重启,会丢失最近N个事务的binlog日志.所以,在即使主机宕机,也不允许发生事务丢失的场景下,该参数应当设置为1.<br>
 
 
-##	redo log的写入机制
+
+<br><br>
+## <span id="jump5">五. log的写入机制</span>
+
 事务在执行过程中,生成的redo log是要先写道redo log buffer的.事务还没提交的时候,redo log buffer中的部分日志有没有可能被持久化到磁盘呢?  答案是,确实会有.
 
 这个问题,要从redo log可能存在的三种状态说起.这三种状态,对应的就是下图三个色块.
@@ -97,3 +136,14 @@ InnoDB有一个后台线程,每隔1秒,就会把redo log buffer中的日志,调�
 每秒一次后台轮询刷盘,再加上崩溃恢复这个逻辑,InnoDB就认为redo log在commit的时候就不需要fsync了,只会write到文件系统的page cache中就够了.
 
 通常我们说MySQL的"双1"配置,指的就是sync_binlog和innodb_flush_log_at_trx_commit都设置成1.也就是说,一个事务完整提交前,需要等待两次刷盘,一次是redo log(prepare阶段),一次是binlog.
+
+
+
+<br><br>
+## <span id="jump6">六. 小结</span>
+
+为什么需要binlog和redo log两种日志呢? 既然redo log能保证crash safe了,不要binlog了行不行?为什么要搞成prepare和commit两阶段提交这么麻烦?<br>
+
+* 首先,binlog是server层的日志,而redo log是InnoDB引擎层的日志,也就是说,其他引擎下没有redo log,只有binlog,因此其他引擎也就不具备crash safe能力
+* 两种log面向的需求场景不一样,binlog是为了备份归档,以及快速恢复到某个时间点数据库状态而存在的,这里不存在crash safe能力;而InnoDB为了有crash safe能力,在引擎层自己实现了redo log,但它是循环写的,会覆盖,因此redo log没有备份归档的能力,只是用作crash safe
+* 由上面原因,InnoDB下,不能去掉二者中的任何其一(因为要兼具备份归档和crash safe能力),所以这里就涉及到怎么保证两种日志数据一致性的问题,MySQL InnoDB下,就是采用了前面分析的两阶段提交这种方案来保证binlog和redo log的一致性
