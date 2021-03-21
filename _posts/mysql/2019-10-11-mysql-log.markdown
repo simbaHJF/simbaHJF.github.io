@@ -111,7 +111,7 @@ write和fsync的时机,是由参数sync_binlog控制的:
 <br><br>
 ## <span id="jump5">五. log的写入机制</span>
 
-事务在执行过程中,生成的redo log是要先写道redo log buffer的.事务还没提交的时候,redo log buffer中的部分日志有没有可能被持久化到磁盘呢?  答案是,确实会有.
+事务在执行过程中,生成的redo log是要先写到redo log buffer的.事务还没提交的时候,redo log buffer中的部分日志有没有可能被持久化到磁盘呢?  答案是,确实会有.
 
 这个问题,要从redo log可能存在的三种状态说起.这三种状态,对应的就是下图三个色块.
 ![uLcgkq.png](https://s2.ax1x.com/2019/10/12/uLcgkq.png)
@@ -142,8 +142,25 @@ InnoDB有一个后台线程,每隔1秒,就会把redo log buffer中的日志,调�
 <br><br>
 ## <span id="jump6">六. 小结</span>
 
-为什么需要binlog和redo log两种日志呢? 既然redo log能保证crash safe了,不要binlog了行不行?为什么要搞成prepare和commit两阶段提交这么麻烦?<br>
+**<font size="4">为什么需要binlog和redo log两种日志呢? 既然redo log能保证crash safe了,不要binlog了行不行?为什么要搞成prepare和commit两阶段提交这么麻烦?</font>** <br>
 
 * 首先,binlog是server层的日志,而redo log是InnoDB引擎层的日志,也就是说,其他引擎下没有redo log,只有binlog,因此其他引擎也就不具备crash safe能力
 * 两种log面向的需求场景不一样,binlog是为了备份归档,以及快速恢复到某个时间点数据库状态而存在的,这里不存在crash safe能力;而InnoDB为了有crash safe能力,在引擎层自己实现了redo log,但它是循环写的,会覆盖,因此redo log没有备份归档的能力,只是用作crash safe
 * 由上面原因,InnoDB下,不能去掉二者中的任何其一(因为要兼具备份归档和crash safe能力),所以这里就涉及到怎么保证两种日志数据一致性的问题,MySQL InnoDB下,就是采用了前面分析的两阶段提交这种方案来保证binlog和redo log的一致性
+
+
+**<font size="4">整体梳理下,在数据更新时,数据页,数据文件,redo log buffer,redo log以及redo log文件循环利用时checkpoint的流程</font>** <br>
+
+执行更新时,在数据页与数据文件层面,数据只是被更新到了内存数据页中,这时执行的数据同步只是将数据同步到操作系统的page cache中,还未刷盘到磁盘文件,因此宕机将丢失.<br>
+
+为了避免宕机数据丢失,这时有两个办法:<br>
+
+第一种办法,每次数据更新,都完成page cache到磁盘的刷盘操作,但注意!!这个IO操作是磁盘随机IO,因为数据存储在磁盘的哪个块中,是无法预料的,因此是随机IO,性能低下.因此当然也没有采用这种办法.<br>
+
+那么接下来就是第二种办法,借助redo log.每次数据被更新到数据页,同步到page cache时,认为数据更新的操作就完成了,不刷盘,在数据更新前,需要将对页的修改记录到redo log中,对redo log完成同步到page cache并最终刷盘到磁盘(WAL,write ahead log,先写日志再改数据).注意,这里会完成了刷盘操作,也就是说从redo log的角度讲,即使宕机,修改操作也是已经被记录到redo log中了,这里讲的是对页的修改操作被保存了,而不是原数据页同步到数据文件了,因此数据文件还是会缺数据,但是,可以通过redo log找回来了.而redo log的刷盘采用的是顺序写,不再是随机IO了,磁盘顺序写的性能一定条件下甚至可以媲美内存,因此顺序写的性能是很高的.这就完美解决了crash safe和性能问题的兼顾.另外,redo log在InnoDB正常运行时,是用不到的,只是防止宕机.<br>
+
+因为redo log是循环利用的,当不断的写入时,它一定会满,这时就用到了checkpoint机制.checkpoint之前的记录,表示的是这些对数据页的修改操作,已经将数据页的脏页刷盘到数据文件了,因此,即使宕机,这块数据也不会丢失了,因此这之前的redo log,就不再需要保留了,这时就可以将其之后的对页的修改操作造成的数据脏页,刷盘到数据文件,那么这时,这些数据也已经安全了,这时就可以向前推荐checkpoint了,表示前面的修改,已经完成了数据脏页到数据文件的刷盘,已安全.那么推进完checkpoint腾出来的空间,就又可以来循环使用了.<br>
+
+至于什么时候将数据脏页刷盘回数据文件,这是另外一件事了,简单讲就是在系统不忙的时候刷盘回去,或者内存吃紧的时候采用LRU算法将不常使用的页释放时判断是否脏页,脏页则需要先进行刷盘.<br>
+
+<font color="red">这个流程关键的就是要区分开:数据页,数据文件,redo log这几个不同的概念.当然这里将redo buffer的过程省略跳过了.</font>
