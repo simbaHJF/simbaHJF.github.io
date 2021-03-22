@@ -247,7 +247,7 @@ G1与CMS的对比:<br>
 * 额外执行负载高于CMS
 
 
-<font color="red">G1收集器,在只对年轻代进行Minor GC的时候,是不执行并发标记阶段的,进行Minor GC的过程中,STW.只有在Mixed GC时(年轻代+部分老年代)才进行并发标记阶段.换句话讲,并发标记周期是为Mixed GC服务的,这个阶段将会为混合收集周期识别垃圾最多的老年代分区.并发标记阶段是借用young gc阶段完成的初始标记来进行的.</font><br>
+<font color="red">G1收集器,在只对年轻代进行Minor GC的时候,是不执行并发标记阶段的,进行Minor GC的过程中,STW.只有在Mixed GC时(年轻代+部分老年代)才进行并发标记阶段.换句话讲,并发标记周期是为Mixed GC服务的,这个阶段将会为混合收集周期识别垃圾最多的老年代分区.并发标记阶段是借用young gc阶段的STW完成初始标记的.</font><br>
 
 当达到如下条件时,会开启并发标记阶段:
 * 当一次young gc时,计算和评估后,老年代对象占用空间大于-XX:InitiatingHeapOccupancyPercent(默认45%)
