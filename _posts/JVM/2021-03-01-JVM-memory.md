@@ -247,7 +247,26 @@ G1与CMS的对比:<br>
 * 额外执行负载高于CMS
 
 
-<font color="red">G1收集器,在只对年轻代进行Minor GC的时候,是不执行并发标记阶段的,进行Minor GC的过程中,STW.只有在Mixed GC时(年轻代+部分老年代)才进行并发标记阶段.换句话讲,并发标记周期是为Mixed GC服务的,这个阶段将会为混合收集周期识别垃圾最多的老年代分区.随着老年代内存增长,当到达 IHOP 阈值 -XX:InitiatingHeapOccupancyPercent(老年代占整堆比，默认45%)时,G1 开始着手准备收集老年代空间,这次Mixed GC就需要经历并发标记的周期了,随后 G1 并不会马上开始一次混合收集,而是让应用线程先运行一段时间,等待触发一次年轻代收集,然后借用这次年轻代收集过程中的初始标记阶段来完成后面并发标记阶段的执行</font>
+<font color="red">G1收集器,在只对年轻代进行Minor GC的时候,是不执行并发标记阶段的,进行Minor GC的过程中,STW.只有在Mixed GC时(年轻代+部分老年代)才进行并发标记阶段.换句话讲,并发标记周期是为Mixed GC服务的,这个阶段将会为混合收集周期识别垃圾最多的老年代分区.并发标记阶段是借用young gc阶段完成的初始标记来进行的.</font><br>
+
+当达到如下条件时,会开启并发标记阶段:
+* 当一次young gc时,计算和评估后,老年代对象占用空间大于-XX:InitiatingHeapOccupancyPercent(默认45%)
+* 可用空间小于-XX:G1ReservePercent
+* 遇到大对象分配的特殊情况
+
+Evacuation Failure,在G1中指:转移失败.可类比于CMS收集器的Concurrent Mode Failure.下面是官方文档对其的解释
+[![6oHvB8.png](https://z3.ax1x.com/2021/03/22/6oHvB8.png)](https://imgtu.com/i/6oHvB8)
+
+当出现Evacuation Failure时,会进行Full GC,STW.因此,为了避免Evacuation Failure,G1会预留一部分空间,预留百分比由参数-XX:G1ReservePercent来控制,默认10%.当然这也并不能绝对保证不会出现避免Evacuation Failure.<br>
+
+-XX:G1MixedGCLiveThresholdPercent参数的含义:<br>
+Mixed GC中,老年代Region中存活对象低于G1MixedGCLiveThresholdPercent(默认85%)指定的百分比时,才会对其回收.<br>
+
+-XX:G1MixedGCCountTarget参数的含义:<br>
+Mixed GC中,它将用候选Old区域的数量除以G1MixedGCCountTarget,并尝试在每个周期中至少收集那么多区域,最多会收集G1MixedGCCountTarget次.<br>
+
+-XX:G1HeapWastePercent参数的含义:<br>
+标记周期完成后,统计出的所有Cset内,老年代Region中可回收的垃圾占比大于G1HeapWastePercent指定的百分比时,才会开启Mixed GC,最多执行G1MixedGCCountTarget次Mixed GC,默认8次,当执行完某次Mixed GC时,比如执行了4次,如果此时老年代Region中可回收的垃圾占比小于G1HeapWastePercent了,就不再继续执行下次Mixed GC了.<br>
 
 
 
