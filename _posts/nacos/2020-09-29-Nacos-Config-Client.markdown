@@ -522,7 +522,7 @@ class LongPollingRunnable implements Runnable {
 这里主要分4步:
 1.  check failover config,检查本地配置相关.
 2.  check server config.从Server获取值变化了的DataID列表,返回的是一个key列表,key由dataId,group和tenant(如果有的话)构成.
-3.  遍历第2步返回的有变化的key列表,对每一个key,反向解析出dataId,group,tenant,然后调用getServerConfig方法,获取配置的content,并更新md5
+3.  遍历第2步返回的有变化的key列表,对每一个key,反向解析出dataId,group,tenant,然后调用getServerConfig方法请求server,获取配置的content,并更新md5
 4.  对变更了的CacheData,调用cacheData.checkListenerMd5(),该方法内部执行监听器回调方法,拉起回调是通过listener.receiveConfigInfo(contentTmp);这一行代码实现,由此可见,回调执行的是Listener的receiveConfigInfo方法,然后对listenerWrap的lastCallMd5进行更新.
 
 在第3点中:  
