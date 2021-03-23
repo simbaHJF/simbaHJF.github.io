@@ -250,7 +250,7 @@ G1与CMS的对比:<br>
 <font color="red">G1收集器,在只对年轻代进行Minor GC的时候,是不执行并发标记阶段的,进行Minor GC的过程中,STW.只有在Mixed GC时(年轻代+部分老年代)才进行并发标记阶段.换句话讲,并发标记周期是为Mixed GC服务的,这个阶段将会为混合收集周期识别垃圾最多的老年代分区.并发标记阶段是借用young gc阶段的STW完成初始标记的.</font><br>
 
 当达到如下条件时,会开启并发标记阶段:
-* 当一次young gc时,计算和评估后,老年代对象占用空间大于-XX:InitiatingHeapOccupancyPercent(默认45%)
+* 当一次young gc时,计算和评估后,老年代region占用空间总量对整堆空间总量的百分比大于-XX:InitiatingHeapOccupancyPercent(默认45%),这个参数的解释,网上说什么的都有,有的说是整堆使用占比超过45%,有的说是老年代占用超过整堆45%.经试验验证,是老年代region占用空间总量对整堆空间总量的占比,超过整堆的45%
 * 可用空间小于-XX:G1ReservePercent
 * 遇到大对象分配的特殊情况
 
@@ -268,7 +268,7 @@ Mixed GC中,它将用候选Old区域的数量除以G1MixedGCCountTarget,并尝�
 -XX:G1MixedGCLiveThresholdPercent参数的含义:<br>
 Mixed GC中,老年代Region中存活对象低于G1MixedGCLiveThresholdPercent(默认85%)指定的百分比时,Mixed GC时才会对其回收.<br>
 
-
+在满足触发并发标记的条件后,并不会立即开启并发标记周期,而是等待一次young gc,并复用这次young gc的STW完成的root scan操作,因此可以说全局并发标记总是伴随着young gc而发生的.
 
 <br><br>
 ## <span id="jump9">九. 低延迟垃圾垃圾收集器</span>
