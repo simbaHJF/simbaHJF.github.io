@@ -227,7 +227,7 @@ G1的几个关键问题:
 G1收集器运行示意图:
 [![6i7QUI.png](https://s3.ax1x.com/2021/03/01/6i7QUI.png)](https://imgtu.com/i/6i7QUI)
 
-G1收集器的运作过程大致可划分为以下四个步骤:
+G1收集器 Mixed GC的运作过程大致可划分为以下四个步骤:<font color="red">注意,G1只针对年轻代进行young gc时是没有下面步骤的</font>
 * 初始标记: 仅仅只是标记一下GC Roots能直接关联到的对象(可理解为根节点枚举),并且修改TAMS指针的值,让下一阶段用户线程并发运行时,能正确地在可用的Region中分配新对象.这个阶段需要停顿线程,但耗时很短,而且是借用进行Minor GC的时候同步完成的,所以G1收集器在这个阶段实际没有额外的停顿.
 * 并发标记: 从GC Roots开始对堆中对象进行可达性分析,递归扫描整个堆里的对象图,找出要回收的对象,这阶段耗时较长,但可与用户程序并发执行.当对象图扫描完成以后,还要重新处理SATB(原始快照)记录下的在并发时有引用变动的对象.
 * 最终标记: 对用户线程做另一个短暂的暂停,用于处理并发阶段结束后仍遗留下来的最后那少量的SATB记录.
@@ -259,14 +259,14 @@ Evacuation Failure,在G1中指:转移失败.可类比于CMS收集器的Concurren
 
 当出现Evacuation Failure时,会进行Full GC,STW.因此,为了避免Evacuation Failure,G1会预留一部分空间,预留百分比由参数-XX:G1ReservePercent来控制,默认10%.当然这也并不能绝对保证不会出现避免Evacuation Failure.<br>
 
--XX:G1MixedGCLiveThresholdPercent参数的含义:<br>
-Mixed GC中,老年代Region中存活对象低于G1MixedGCLiveThresholdPercent(默认85%)指定的百分比时,才会对其回收.<br>
+-XX:G1HeapWastePercent参数的含义:<br>
+标记周期完成后,统计出的所有Cset内,老年代Region中可回收的垃圾占比大于G1HeapWastePercent指定的百分比时,才会开启Mixed GC,最多执行G1MixedGCCountTarget次Mixed GC,默认8次,当执行完某次Mixed GC时,比如执行了4次,如果此时老年代Region中可回收的垃圾占比小于G1HeapWastePercent了,就不再继续执行下次Mixed GC了.<br>
 
 -XX:G1MixedGCCountTarget参数的含义:<br>
 Mixed GC中,它将用候选Old区域的数量除以G1MixedGCCountTarget,并尝试在每个周期中至少收集那么多区域,最多会收集G1MixedGCCountTarget次.<br>
 
--XX:G1HeapWastePercent参数的含义:<br>
-标记周期完成后,统计出的所有Cset内,老年代Region中可回收的垃圾占比大于G1HeapWastePercent指定的百分比时,才会开启Mixed GC,最多执行G1MixedGCCountTarget次Mixed GC,默认8次,当执行完某次Mixed GC时,比如执行了4次,如果此时老年代Region中可回收的垃圾占比小于G1HeapWastePercent了,就不再继续执行下次Mixed GC了.<br>
+-XX:G1MixedGCLiveThresholdPercent参数的含义:<br>
+Mixed GC中,老年代Region中存活对象低于G1MixedGCLiveThresholdPercent(默认85%)指定的百分比时,Mixed GC时才会对其回收.<br>
 
 
 
