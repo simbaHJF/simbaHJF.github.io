@@ -1,7 +1,7 @@
 ---
 layout:     post
 title:      "Nacos注册中心:nacos-center服务注册"
-date:       2021-03-25 15:00:00 +0800
+date:       2021-03-26 15:00:00 +0800
 author:     "simba"
 header-img: "img/post-bg-miui6.jpg"
 tags:
@@ -15,7 +15,8 @@ tags:
 ## 导航
 [一. nacos-center端服务注册信息数据结构管理](#jump1)
 <br>
-
+[二. nacos-center,服务注册流程](#jump2)
+<br>
 
 
 
@@ -54,3 +55,9 @@ tags:
 
 
 [![6jY7V0.png](https://z3.ax1x.com/2021/03/26/6jY7V0.png)](https://imgtu.com/i/6jY7V0)
+
+
+nacos-center端在注册信息变更,更新ephemeralInstances与persistentInstances这两个服务注册信息缓存表后,会通过upd向在本节点上进行服务订阅的client发送服务列表变更的信息.这里,nacos采用upd+ack确认的方式,保证高效的同时确保安全性.<br>
+
+1.  center --> client  udp pkg
+2.  client --> center  udp ack
