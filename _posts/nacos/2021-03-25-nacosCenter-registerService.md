@@ -42,3 +42,15 @@ tags:
 
 **<font size="5">整体数据结构示意图</font>**
 [![6O1zJs.png](https://z3.ax1x.com/2021/03/25/6O1zJs.png)](https://imgtu.com/i/6O1zJs)
+
+
+
+<br><br>
+## <span id="jump2">二. nacos-center,服务注册流程</span>
+
+流程图转自
+
+> https://blog.csdn.net/weixin_42437633/article/details/105336354?utm_medium=distribute.pc_relevant_t0.none-task-blog-BlogCommendFromBaidu-1.control&depth_1-utm_source=distribute.pc_relevant_t0.none-task-blog-BlogCommendFromBaidu-1.control
+
+
+[![6jY7V0.png](https://z3.ax1x.com/2021/03/26/6jY7V0.png)](https://imgtu.com/i/6jY7V0)
