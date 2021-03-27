@@ -14,12 +14,15 @@ tags:
 ## 导航
 [一. 前言](#jump1)
 <br>
-[二. 检测主观下线状态](#jump2)
+[二. 集群节点信息状态](#jump2)
 <br>
-[三. 检测客观下线状态](#jump3)
+[三. 检测主观下线状态](#jump3)
 <br>
-[四. 选举领头Sentinel](#jump4)
+[四. 检测客观下线状态](#jump4)
 <br>
+[五. 选举领头Sentinel](#jump5)
+<br>
+[六. 故障转移](#jump6)
 
 
 
@@ -48,7 +51,55 @@ Sentinel(哨兵)是Redis的高可用解决方案:由一个或多个Sentinel实�
 
 
 <br><br>
-## <span id="jump2">二. 检测主观下线状态</span>
+## <span id="jump2">二. 集群节点信息状态</span>
+
+<br>
+**<font size="4">创建网络连接</font>** <br>
+
+Sentinel会向各个主节点及从节点创建两个网络连接
+* 命令连接: 专门用于发送命令及接收回复
+* 订阅连接: 订阅 \_sentinel\_:hello 频道
+
+Sentinel各节点之间不会创建订阅订阅连接,只会创建命令连接.
+
+
+<br>
+**<font size="4">Sentinel获取主服务器信息</font>** <br>
+
+Sentinel会以默认每10秒一次的频率通过命令连接向被监视的主服务器发送INFO命令,命令回复中包含两方面信息:
+* 主服务器自身的信息
+* 主服务器属下所有从服务器的信息
+
+
+<br>
+**<font size="4">Sentinel获取从服务器信息</font>** <br>
+
+Sentinel以默认每10秒一次的频率通过命令连接向从服务器发送INFO命令,获取从服务器中中的相关信息
+* 该从服务器复制的主服务器的相关信息
+* 该从服务器自身的相关信息
+
+
+<br>
+**<font size="4">Sentinel订阅 \_sentinel\_:hello 频道</font>** <br>
+
+当Sentinel与一个主或者从服务器建立起订阅连接之后,就会通过订阅连接向服务器发送以下命令<br>
+``SUBSCRIBE _sentinel_:hello``<br>
+也就是说,对于每个与Sentinel连接的服务器,Sentinel既通过命令连接向服务器的 \_sentinel\_:hello 频道发送信息,又通过订阅连接来通过服务器的 \_sentinel\_:hello 频道接收信息.<br>
+
+对于监视同一个服务器的多个Sentinel来说,一个Sentinel发送的信息会被其他Sentinel接收到,这些信息会被用于更新其他Sentinel对发送信息Sentinel的认知.<br>
+
+因为一个Sentinel可以通过分析接收到的频道信息来获知其他Sentinel的存在,并通过发送频道信息来让其他Sentinel知道自己的存在,**<font color="red">所以用户在使用Sentinel的时候不需要提供各个Sentinel的地址信息,监视同一主服务器的多个Sentinel可以自动发现对方.</font>** <br>
+
+
+<br>
+**<font size="4">Sentinel向主服务器和从服务器发送信息</font>** <br>
+
+默认情况下,Sentinel会以每两秒一次的频率,通过命令连接向所有被监视主服务器和从服务器的\_sentinel\相关命令以传递信息
+[![6xvwND.png](https://z3.ax1x.com/2021/03/27/6xvwND.png)](https://imgtu.com/i/6xvwND)
+
+
+<br><br>
+## <span id="jump3">三. 检测主观下线状态</span>
 
 默认情况下,Sentinel会以每秒一次的频率向所有与它创建了命令连接的实例(包括主服务器、从服务器、其他sentinel在内)发送PING命令,并通过实例返回的PING命令回复来判断实例是否在线.<br>
 
@@ -60,7 +111,7 @@ Sentinel(哨兵)是Redis的高可用解决方案:由一个或多个Sentinel实�
 * 有效回复:实例返回 +PONG、 -LOADING、 -MASTERDOWN三种回复的其中一种
 * 无效回复:除有效回复外的其他回复,或者在指定时限内没有返回任何回复
 
-Sentinel配置文件中的down-after-milliseconds选项制定了Sentinel判断实例进入主观下线所需的时间长度:如果一个实例在down-after-milliseconds毫秒内,连续向Sentinel返回无效回复,那么Sentinel会修改这个实例所对应的实例结构,在结构的flags属性中打开SRI_S_DOWN标识,以此来表示这个实例已经进入主观下线状态.<br>
+Sentinel配置文件中的**<font color="red">down-after-milliseconds</font>**选项指定了Sentinel判断实例进入主观下线所需的时间长度:如果一个实例在down-after-milliseconds毫秒内,连续向Sentinel返回无效回复,那么Sentinel会修改这个实例所对应的实例结构,在结构的flags属性中打开SRI_S_DOWN标识,以此来表示这个实例已经进入主观下线状态.<br>
 
 [![6sFqUA.png](https://s3.ax1x.com/2021/03/16/6sFqUA.png)](https://imgtu.com/i/6sFqUA)
 [![6skpDg.png](https://s3.ax1x.com/2021/03/16/6skpDg.png)](https://imgtu.com/i/6skpDg)
@@ -68,7 +119,7 @@ Sentinel配置文件中的down-after-milliseconds选项制定了Sentinel判断�
 
 
 <br><br>
-## <span id="jump3">三. 检测客观下线状态</span>
+## <span id="jump4">四. 检测客观下线状态</span>
 
 当Sentinel将一个主服务器判断为主观下线之后,为了确认这个主服务器是否真的下线了,它会向同样监视这一主服务器的其他Sentinel进行询问,看它们是否也认为主服务器已经进入了下线状态(可以是主观下线或者客观下线).当Sentinel从其他Sentinel那里接收到足够数量的已下线判断之后,Sentinel就会将服务器判定为客观下线,并对主服务器执行故障转移操作.<br>
 
@@ -104,7 +155,7 @@ SENTINEL is-master-down-by-addr <ip> <port> <current_epoch> <runid>
 
 
 <br><br>
-## <span id="jump4">四. 选举领头Sentinel</span>
+## <span id="jump5">五. 选举领头Sentinel</span>
 
 当一个主服务器被判断为客观下线时,监视这个下线主服务器的各个Sentinel会进行协商,选举出一个领头Sentinel,并由领头Sentinel对下线主服务器执行故障转移操作.<br>
 
@@ -123,7 +174,7 @@ Redis选举领头Sentinel的规则和方法如下:
 
 
 <br><br>
-## <span id="jump5">五. 故障转移</span>
+## <span id="jump6">六. 故障转移</span>
 
 在选举产生出领头Sentinel之后,领头Sentinel将对已下线的主服务器执行故障转移操作,该操作包含以下三个步骤:
 1. 在已下线主服务器属下的所有从服务器里面,挑选出一个从服务器,并将其转换为主服务器
