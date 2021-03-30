@@ -15,7 +15,7 @@ tags:
 而epoll没有这个限制,它所支持的最大FD上限远远大于1024,在1GB内存的机器上是10万左右(具体数目可以cat /proc/sys/fs/file-max查看).
 *  select函数每次都是当监听的套接组有事件产生时就会返回,但却不能将有事件产生的套接字筛选出来,而是改变其在套接组的标志量,所以每次监听到事件,都需要将套接组整个遍历一遍.时间复杂度是O(n).当FD数目增加时,效率会线性下降. 
 而epoll,每次会将监听套结字中产生事件的套接字加到一列表中,然后我们可以直接对此列表进行操作,而没有产生事件的套接字会被过滤掉,极大的提高了IO效率.这一点尤其在套接字监听数量巨大而活跃数量很少的时候很明显.
-*  使用mmap加速内核与用户空间的消息传递.无论是select,poll还是epoll都需要内核把FD消息通知给用户空间,如何避免不必要的内存拷贝就很重要,在这点上,epoll是通过内核于用户空间mmap同一块内存实现的.
+
 
 ####  epoll的相关系统调用
 epoll有epoll_create,  epoll_ctl,  epoll_wait  3个系统调用.
@@ -25,7 +25,7 @@ a.  int epoll_create(int size);
 创建一个epoll的句柄.自从linux2.6.8之后,size参数是被忽略的.需要注意的是,当创建好epoll句柄后,它就是会占用一个fd值,在linux下如果查看/proc/进程id/fd/,是能够看到这个fd的,所以在使用完epoll后,必须调用close()关闭,否则可能导致fd被耗尽.
 <br>
 <br>
-b.  int epoll_ctl(int epfd, int op, int fd, struct epoll_event *event);
+b.  int epoll_ctl(int epfd, int op, int fd, struct epoll_event \*event);
 epoll的事件注册函数,它不同于select()是在监听事件时告诉内核要监听什么类型的事件,而是在这里先注册要监听的事件类型.<br>
 &emsp;&emsp;第一个参数是epoll_create()的返回值.<br>
 &emsp;&emsp;第二个参数表示动作,用三个宏来表示:
@@ -71,7 +71,8 @@ Nginx默认采用ET模式来使用epoll.
 
 
 ####  epoll工作原理
-epoll只告知那些就绪的文件描述符,而且当我们调用epoll_wait()获得就绪文件描述符时,返回的不是实际的描述符,而是一个代表就绪描述符数量的值,只需要去epoll指定的一个数组中依次取得相应数量的文件描述符即可,这里也使用了内存映射(mmap)技术,这样便彻底省掉了这些文件描述符在系统调用时复制的开销.
+epoll只告知那些就绪的文件描述符,而且当我们调用epoll_wait()获得就绪文件描述符时,返回的不是实际的描述符,而是一个代表就绪描述符数量的值,只需要去epoll指定的一个数组中依次取得相应数量的文件描述符即可.<br>
+
 另一个本质的改进在于epoll采用基于事件的就绪通知方式.在select/poll中,进程只有在调用一定的方法后(比如调用select方法),内核才对所有监视的文件描述符进行扫描，而epoll事先通过epoll_ctl()来注册一个文件描述符,一旦基于某个文件描述符就绪时,内核会采用类似callback的回调机制,迅速激活这个文件描述符,当进程调用epoll_wait()时便得到通知.
 
 当一个进程调用epoll_create方法时,Linux内核会创建一个eventpoll结构体,这个结构体中有两个成员与epoll的使用方式密切相关:
