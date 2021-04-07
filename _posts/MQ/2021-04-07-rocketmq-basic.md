@@ -45,7 +45,7 @@ tags:
 <br><br>
 ## <span id="jump2">二. 如果Broker挂了,系统是怎么感知到的</span>
 
-Broker和NameServer之间建立心跳机制,Broker定时给所有的NameServer发送心跳,告诉每个NameServer自己当前处于健康存活状态.<br>
+Broker和NameServer之间建立心跳机制,Broker定时给所有的NameServer发送心跳,告诉每个NameServer自己当前处于健康存活状态.Broker跟NameServer之间的通信是基于长连接的,即Broker会跟每个NameServer都建立一个TCP长连接,然后定时通过TCP长连接发送心跳请求,发送的心跳信息中还会带上自己这个Broker节点的一些其他元信息(包括自己存放了哪些Topic等)<br>
 
 NameServer每次收到一个Broker的心跳,就更新一下该Broker的最近一次心跳时间.然后NameServer会每隔10秒进行一次检查,检查各个Broker的最近一次心跳时间,如果某个Broker超过120s都没发送心跳了,那么就认为这个Broker已经挂掉了. <br>
 
