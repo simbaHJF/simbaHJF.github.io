@@ -22,7 +22,10 @@ tags:
 <br>
 [五. RocketMQ Master Broker挂掉了怎么办](#jump5)
 <br>
-
+[六. 向RocketMQ发送消息的几种方式](#jump6)
+<br>
+[七. 从RocketMQ消费消息的几种方式](#jump7)
+<br>
 
 
 
@@ -86,3 +89,20 @@ NameServer每次收到一个Broker的心跳,就更新一下该Broker的最近一
 * RocketMQ 4.5版本之后,提供了一种新机制:Dledger,基于Raft算法.此时一旦Master Broker宕机了,可以通过Dledger进行leader选举,将一个Slave Broker选举为新的Master Broker,然后这个Master Broker就可以对外提供服务了.以此来完成自动的故障转移机制.
 
 <font color="red">简单讲就是,Broker节点开启Dledger机制后,会通过Dledger相关机制,而自动具备了Master Broker故障时通过Raft进行leader选举从而将某个Slave Broker提升为Master的能力,实现自动的故障转移</font><br>
+
+
+
+<br><br>
+## <span id="jump6">六. 向RocketMQ发送消息的几种方式</span>
+
+* 同步发送
+* 异步发送,设置成功和失败的回调函数
+* oneway,执行一次发送,不管发送结果是成功还是失败都继续往下走,简单讲就是发完就过,不管结果
+
+
+
+<br><br>
+## <span id="jump7">七. 从RocketMQ消费消息的几种方式</span>
+
+* Pull方式,consumer端从Broker拉取消息
+* Push方式,Broker向consumer端推送消息
