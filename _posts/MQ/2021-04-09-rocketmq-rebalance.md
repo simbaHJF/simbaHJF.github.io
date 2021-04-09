@@ -19,6 +19,9 @@ tags:
 <br>
 [二. Rebalance的触发场景](#jump2)
 <br>
+[三. Consumer Rebalance机制](#jump3)
+<br>
+
 
 
 
@@ -67,3 +70,73 @@ Broker是通知每个消费者各自Rebalance,即每个消费者自己给自己�
 **<font size="4">Rebalance的触发时机</font>** <br>
 
 * 在启动时,消费者会立即向所有Broker发送一次发送心跳(HEART_BEAT)请求,Broker则会将消费者添加由ConsumerManager维护的某个消费者组中.然后这个Consumer自己会立即触发一次Rebalance
+* 在运行时,消费者接收到Broker通知会立即触发Rebalance,同时为了避免通知丢失,会周期性触发Rebalance
+* 当停止时,消费者向所有Broker发送取消注册客户端(UNREGISTER_CLIENT)命令,Broker将消费者从ConsumerManager中移除,并通知其他Consumer进行Rebalance
+
+
+<br>
+**<font size="4">RocketMQ Rebalance特点</font>** <br>
+
+只要一个消费者组需要Rebalance,那么这台机器上启动的所有其他消费者,也都要进行Rebalance
+```
+public void doRebalance() {
+    //迭代每个consumer，进行rebalance
+    for (Map.Entry<String, MQConsumerInner> entry : this.consumerTable.entrySet()) {
+        MQConsumerInner impl = entry.getValue();
+        if (impl != null) {
+            try {
+                //逐一触发Rebalance
+                impl.doRebalance();
+            } catch (Throwable e) {
+                log.error("doRebalance exception", e);
+            }
+        }
+    }
+}
+```
+
+RocketMQ是按照Topic维度进行Rebalance的
+```
+public void doRebalance(final boolean isOrder) {
+    //1 迭代当前consumer订阅的每一个topic，逐一进行rebalance
+    Map<String, SubscriptionData> subTable = this.getSubscriptionInner();
+    if (subTable != null) {
+        for (final Map.Entry<String, SubscriptionData> entry : subTable.entrySet()) {
+            final String topic = entry.getKey();
+            try {
+                //2 按照topic维度进行rebalance
+                this.rebalanceByTopic(topic, isOrder);
+            } catch (Throwable e) {
+                if (!topic.startsWith(MixAll.RETRY_GROUP_TOPIC_PREFIX)) {
+                    log.warn("rebalanceByTopic Exception", e);
+                }
+            }
+        }
+    }
+ 
+    this.truncateMessageQueueNotMyTopic();
+}
+```
+
+而Kafka与RocketMQ不同,Kafka是将所有Topic下的所有队列合并在一起,进行Rebalance.<br>
+
+
+<br>
+**<font size="4">单个Topic的Rebalance流程</font>** <br>
+
+1. 获得Rebalance元数据信息
+2. 进行队列分配
+	> 这里分配策略使用AllocateMessageQueueStrategy接口表示,提供了多种实现
+3. 分配结果处理
+
+
+那么接下来回答本节开头提出的第一个问题,如何保证分配结果的一致性,其实是通过以下两个手段:
+* 首先,在分配之前,需要对Topic下的多个队列进行排序,对多个消费者实例也按照id进行排序
+* 其次,每个消费者需要使用相同的分配策略
+
+这里以AllocateMessageQueueAveragely分配为例来进行说明.假设某个Topic有10个队列,消费者组有3个实例c1,c2,c3,使用AllocateMessageQueueAveragely分配结果如下图所示:
+[![cU2fYV.png](https://z3.ax1x.com/2021/04/09/cU2fYV.png)](https://imgtu.com/i/cU2fYV)
+
+在分配时,每个消费者(c1、c2、c3)平均分配3个,此时还多出1个,多出来的队列按顺序分配给消费者队列的头部元素,因此c1多分配1个,最终c1分配了4个队列.<br>
+
+尽管每个消费者是各自给自己分配,但是因为使用的相同的分配策略,定位从队列列表中哪个位置开始给自己分配,给自己分配多少个队列,从而保证最终分配结果的一致.
