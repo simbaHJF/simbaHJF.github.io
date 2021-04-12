@@ -56,7 +56,7 @@ Broker之所以能维护Rebalance元数据,以及通知消费组下的所有实�
 Broker是通知每个消费者各自Rebalance,即每个消费者自己给自己重新分配队列,而不是Broker将分配好的结果告知Consumer.<br>
 
 从这个角度,RocketMQ与Kafka Rebalance机制类似,二者Rebalance分配都是在客户端进行,不同的是:
-* 会在消费者组的多个消费者实例中,选出一个作为Group Leader,由这个Group Leader来进行分区分配,分配结果通过Cordinator(特殊角色的broker)同步给其他消费者.相当于Kafka的分区分配只有一个大脑,就是Group Leader
+* Kafka会在消费者组的多个消费者实例中,选出一个作为Group Leader,由这个Group Leader来进行分区分配,分配结果通过Cordinator(特殊角色的broker)同步给其他消费者.相当于Kafka的分区分配只有一个大脑,就是Group Leader
 * 每个消费者,自己负责给自己分配队列,相当于每个消费者都是一个大脑
 
 这里针对RocketMQ的Rebalance机制,先提出两个关键问题,随着对Rebalance机制的分析,会回答这两个问题
