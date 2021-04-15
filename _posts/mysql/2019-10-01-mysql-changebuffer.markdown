@@ -73,7 +73,7 @@ mysql> insert into t(id,k) values(id1,k1),(id2,k2);
 select * from t where k in (k1,k2)
 ```
 
-如果度语句发生在更新语句后不久,内存中的数据都还在,那么此时的这两个读操作就与系统表空间(ibdata1)和redo log(ib_log_fileX)无关了.所以下面流程图中没画出这两部分:
+如果读语句发生在更新语句后不久,内存中的数据都还在,那么此时的这两个读操作就与系统表空间(ibdata1)和redo log(ib_log_fileX)无关了.所以下面流程图中没画出这两部分:
 ![uh4ah4.png](https://s2.ax1x.com/2019/10/08/uh4ah4.png)
 
 1.	读page 1 的时候,直接从内存返回.

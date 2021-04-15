@@ -95,7 +95,7 @@ update T set c=c+1 where ID=2;
 ![uL9HgK.png](https://s2.ax1x.com/2019/10/11/uL9HgK.png)
 
 每个线程有自己的binlog cache,但是共用同一份binlog文件.
-*	图中的write,指的是把日志吸入到文件系统的page cache,并没有把数据持久化到磁盘,所以速度比较快.
+*	图中的write,指的是把日志写入到文件系统的page cache,并没有把数据持久化到磁盘,所以速度比较快.
 *	图中的fsync,才是将数据持久化到磁盘的操作.一般情况下我们任务fsync才占磁盘的IOPS.
 
 write和fsync的时机,是由参数sync_binlog控制的:
