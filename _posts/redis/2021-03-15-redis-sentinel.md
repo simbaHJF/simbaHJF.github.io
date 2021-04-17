@@ -60,7 +60,7 @@ Sentinel会向各个主节点及从节点创建两个网络连接
 * 命令连接: 专门用于发送命令及接收回复
 * 订阅连接: 订阅 \_sentinel\_:hello 频道
 
-Sentinel各节点之间不会创建订阅订阅连接,只会创建命令连接.
+<font color="red">Sentinel各节点之间不会创建订阅订阅连接,只会创建命令连接.</font>
 
 
 <br>
@@ -80,10 +80,13 @@ Sentinel以默认每10秒一次的频率通过命令连接向从服务器发送I
 
 
 <br>
-**<font size="4">Sentinel订阅 \_sentinel\_:hello 频道</font>** <br>
+**<font size="4">Sentinel订阅 _sentinel_:hello 频道</font>** <br>
 
 当Sentinel与一个主或者从服务器建立起订阅连接之后,就会通过订阅连接向服务器发送以下命令<br>
 ``SUBSCRIBE _sentinel_:hello``<br>
+
+该命令就会使得Sentinel对服务器的_sentinel_:hello频道完成了订阅,以后哪个其他节点往这个频道发送消息时,该Sentinel节点就能收到了.<br>
+
 也就是说,对于每个与Sentinel连接的服务器,Sentinel既通过命令连接向服务器的 \_sentinel\_:hello 频道发送信息,又通过订阅连接来通过服务器的 \_sentinel\_:hello 频道接收信息.<br>
 
 对于监视同一个服务器的多个Sentinel来说,一个Sentinel发送的信息会被其他Sentinel接收到,这些信息会被用于更新其他Sentinel对发送信息Sentinel的认知.<br>

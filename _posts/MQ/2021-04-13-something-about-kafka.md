@@ -59,3 +59,4 @@ kafka的副本机制是基于领导者的副本机制(Leader-based),但是非lea
 
 而kafka要保证不丢消息,需要设置Producer端参数'acks=all',设置此参数后,发送的消息需要确保follower的异步复制消息,都复制过该消息后,才算消息提交成功.因此kafka要想做到不丢消息,性能会极其低下,就是因为上面分析的这套副本异步复制机制.<br>
 
+Kafka的非leader副本不提供读的负载均衡服务,给出的原因是:方便实现"Read-your-writes".但是我个人认为,你都已经接入MQ了,本身就是个异步化的过程,还"Read-your-writes"个什么劲儿,slave节点消费不到最新消息你就等会儿呗.你看人家RocketMQ,不就实现了么.<br>
