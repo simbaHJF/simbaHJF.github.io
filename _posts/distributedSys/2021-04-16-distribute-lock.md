@@ -1,11 +1,12 @@
 ---
+---
 layout:     post
 title:      "分布式锁"
 date:       2021-04-16 15:30:00 +0800
 author:     "simba"
 header-img: "img/post-bg-miui6.jpg"
 tags:
-    - redis
+    - 分布式
 
 ---
 

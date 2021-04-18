@@ -67,7 +67,7 @@ NameServer每次收到一个Broker的心跳,就更新一下该Broker的最近一
 
 
 <br><br>
-## <span id="jump4">四. MRocketMQ 实现读写分离了吗</span>
+## <span id="jump4">四. RocketMQ 实现读写分离了吗</span>
 
 生产者写入消息,肯定是选择Master Broker去写入的.<br>
 
@@ -105,4 +105,4 @@ NameServer每次收到一个Broker的心跳,就更新一下该Broker的最近一
 ## <span id="jump7">七. 从RocketMQ消费消息的几种方式</span>
 
 * Pull方式,consumer端从Broker拉取消息
-* Push方式,Broker向consumer端推送消息
+* Push方式,给用户的感觉上像是Broker向Consumer推送消息,但底层实际上也是拉取消息

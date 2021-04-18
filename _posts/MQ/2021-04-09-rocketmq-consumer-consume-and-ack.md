@@ -185,4 +185,4 @@ public class PullConsumer {
 
 这个时候,会进入一个rebalance环节,重新给各个消费机器分配他们要处理的MessageQueue.<br>
 
-RocketMQ的rebalance触发是在consumer端完成的,也就是说,consumer端感知到Topic下的MessageQueue信息有变化或者消费组机器数量有变化(或者是NameServer通知的,或者是consumer端定时拉取NameServer中Topic下最新元信息),按照最新的MessageQueue数量信息进行客户端rebalance.<br>
+RocketMQ的rebalance触发是在consumer端完成的,也就是说,consumer端感知到Topic下的MessageQueue信息有变化或者消费组机器数量有变化(或者是Broker通知的,或者是consumer端定时拉取NameServer中Topic下最新元信息),按照最新的MessageQueue数量信息进行客户端rebalance.<br>
