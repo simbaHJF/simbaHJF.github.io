@@ -27,6 +27,8 @@ tags:
 <br>
 [五. 一点总结](#jump5)
 <br>
+[六. ZAB和Raft的一点对比](#jump6)
+<br>
 
 
 
@@ -67,7 +69,7 @@ Paxos算法需要解决的问题是,如何在一个可能发生宕机或网络�
 <br>
 **<font size="4">Proposer生成提案,也即阶段一</font>** <br>
 
-1.	Proposer选择一个提案编号Mn,然后向Acceptor的某个超过半数的子集成员发送编号为Mn的Prepare请求.
+1.	Proposer选择一个提案编号Mn,然后向Acceptor集群成员发送编号为Mn的Prepare请求.
 2.	如果一个Acceptor收到一个编号为Mn的Prepare请求,且编号Mn大于该Acceptor已经响应的所有Prepare请求的编号,那么它就会将它已经批准过的最大编号的提案作为响应反馈给Proposer,同时该Acceptor会承诺不会再批准任何编号小于Mn的提案
 
 在确定提案之后,Proposer就会将该提案在此发送给某个Acceptor集合,并期望获得它们的批准,我们称此请求为Accept请求.需要注意的一点是,此时接受Accept请求的Acceptor集合不一定是之前响应Prepare请求的Acceptor集合----这点相信读者也能够明白,任意两个半数以上的Acceptor集合,必定包含至少一个公共Acceptor.<br>
@@ -102,3 +104,29 @@ Paxos的描述场景是,存在多个Proposer可以提出提案(可理解为发�
 而为了避免前面的这个问题,就提出了选主的思想(leader才能执行写入请求,也即Proposer变成了一个),此时就不会出现这个问题了,这时是不是就很像Raft了呢?对吧.<br>
 
 Raft简化了场景,规定只允许存在一个节点能操作写入,即leader.对于leader可能的宕机而造成的单点问题,采用故障恢复的选主来进行故障转移,完美解决,同时实现起来逻辑清晰,界限分明,不像Paxos那么模糊复杂.<br>
+
+
+
+<br><br>
+## <span id="jump6">六. ZAB和Raft的一点对比</span>
+
+ZAB角色划分:
+* Leader: 能处理写请求
+* Follower: 接受Leader的数据同步,参与投票
+* Observer: 复制备份,不能参与投票
+
+
+leader选举的效率:
+* Raft中的每个server在某个term轮次内只能投一次票,哪个candidate先请求投票谁就可能先获得投票,这样就可能造成split vote,即各个candidate都没有收到过半的投票,Raft通过candidate设置不同的超时时间,来快速解决这个问题,使得先超时的candidate(在其他人还未超时时)优先请求来获得过半投票
+* ZooKeeper中的每个server,在某个electionEpoch轮次内,可以投多次票,只要遇到更大的票就更新,然后分发新的投票给所有人.这种情况下不存在split vote现象,同时有利于选出含有更新更多的日志的server,但是选举时间理论上相对Raft要花费的多,也就是说ZK的选举中,一个electionEpoch一定可以选出一个leader,然后在这个electionEpoch下leader一直保持服务生命周期,除非这个leader宕机了,那就开启下一个electionEpoch,重新从选举开始
+
+上一轮次的leader的残留的数据的处理问题:
+* Raft:Raft对于之前term的entry被过半还是未过半复制的日志采取的是保守的策略,即暂不提交,只有当本term的数据提交了才能将之前term的数据一起提交
+* ZooKeeper: ZooKeeper每次leader选举之后都会有一个数据同步阶段,采取激进的策略,对于所有过半还是未过半的日志都判定为提交,都将其应用到状态机中
+
+Raft的保守策略更多是因为Raft在leader选举完成之后,没有同步更新过程来保持和leader一致(在可以对外处理请求之前的这一同步过程).而ZooKeeper是有该过程的.所以ZAB从选主到能够再次对外服务是比较比较慢的,因为多了一个过程.<br>
+
+
+
+
+ZooKeeper和Raft在一旦分区发生的情况下是是牺牲了高可用来保证一致性,即CAP理论中的CP.但是在没有分区发生的情况下既能保证高可用又能保证一致性,所以更想说的是所谓的CAP二者取其一,并不是说该系统一直保持CA或者CP或者AP,而是一个会变化的过程.在没有分区出现的情况下,既可以保证C又可以保证A,在分区出现的情况下,那就需要从C和A中选择一样.ZooKeeper和Raft则都是选择了C.
