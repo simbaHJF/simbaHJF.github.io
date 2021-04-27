@@ -1,6 +1,6 @@
 ---
 layout:     post
-title:      "Sentinel"
+title:      "Sentinel 简介"
 date:       2021-04-21 13:00:00 +0800
 author:     "simba"
 header-img: "img/post-bg-miui6.jpg"

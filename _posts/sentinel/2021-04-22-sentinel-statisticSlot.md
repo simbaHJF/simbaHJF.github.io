@@ -17,14 +17,14 @@ tags:
 
 
 ## 导航
-[一. 源码调用链](#jump1)
+[一. StatisticSlot](#jump1)
 <br>
 [二. 滑动窗口计算逻辑](#jump2)
 <br>
 [三. 资源调用线程数统计](#jump3)
 <br>
-
-
+[四. slot链构建](#jump4)
+<br>
 
 
 
@@ -32,7 +32,7 @@ tags:
 
 
 <br><br>
-## <span id="jump1">一. 源码调用链</span>
+## <span id="jump1">一. StatisticSlot</span>
 
 在Sentinel的slotChain中有一个非常重要的slot,即StatisticSlot,它负责对各维度的调用指标信息进行统计,后续的流量控制和熔断降级,都是基于StatisticSlot中的统计信息结合配置的Rule规则进行相应判断来实现的.<br>
 
@@ -336,3 +336,15 @@ protected long calculateWindowStart(/*@Valid*/ long timeMillis) {
 
 StatisticSlot中调用StatisticNode.increaseThreadNum()与StatisticNode.decreaseThreadNum()完成对调用该资源的当前线程数的增减统计.这里并没用到滑动窗口,通过LongAdder类型的curThreadNum的原子加减完成.<br>
 
+
+
+<br><br>
+## <span id="jump4">四. slot链构建</span>
+
+Sentinel中slot链的构建采用了SPI的方式,通过SpiLoader去加载(一个Class对应一个SpiLoader,会缓存Class-SpiLoader),和dubbo的spi很像,dubbo中是ExtensionLoader,这里就不再深入分析SPI机制了,大同小异.<br>
+
+但这里有一点需要提出来注意,Sentinel中通过SPI构建Slot链时,用到了@Spi注解中的isSingleton属性,部分Slot不是单例的,每次都创建新Slot对象,部分是单例的.这点需要注意.然后后根据资源来缓存Slot链.<br>
+
+我的观点认为,这种通过Spi是否单例搀合在Slot链构建中的这个设计,非常不好,对于某个Slot是共享的还是隔离的,显得非常不清晰,反正我是看源码时找了半天才发现是从@Spi注解中控制的.<br>
+
+另外还有一点,在缓存Slot链时,是以ResourceWrapper为key,ProcessorSlotChain为Value缓存的,然后ResourceWrapper重写了hashCode方法,所以才能做到创建多个相同资源下的StringResourceWrapper对象时,能够复用缓存.这点我认为设计的也不好<br>
