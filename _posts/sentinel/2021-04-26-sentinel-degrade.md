@@ -33,7 +33,7 @@ tags:
 <br><br>
 ## <span id="jump1">Sentinel熔断降级流程</span>
 
-[![gpjnXV.png](https://z3.ax1x.com/2021/04/27/gpjnXV.png)](https://imgtu.com/i/gpjnXV)
+[![gPy3gs.png](https://z3.ax1x.com/2021/04/28/gPy3gs.png)](https://imgtu.com/i/gPy3gs)
 
 
 注意以下参数,同hystrix一样,当请求数小于触发熔断的最小请求数阈值时,即使异常比率超出阈值,也不会熔断
