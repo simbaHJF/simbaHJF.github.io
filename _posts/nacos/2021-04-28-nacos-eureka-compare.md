@@ -45,7 +45,9 @@ Nacos同时支持CP与AP.
 
 > 当注册实例是ephemeral类型(临时类型,默认)时,Nacos采用AP模式,通过其自己内部实现的一套叫Distro协议来达成AP模式.
 
-<font color="red">这里需要指出一项在AP模式下Nacos与Eureka的不同,nacos-client同样也是连接到某一个server节点上,当有新服务实例注册或者某实例下线时,server会将信息同步给其他server,而server不需要将心跳信息等同步给其他节点,为什么可以做到不同步心跳呢?这是因为Nacos的server端通过DistroFilter实现了对groupedServiceName的哈希处理,以此实现了服务的分配,当心跳提交到某一server,而server判断该服务实例不由自己处理时,会将其转发到对应的server节点,这就完美解决了Eureka中集群规模增大后的巨量心跳数据同步问题.</font>
+<font color="red">这里需要指出一项在AP模式下Nacos与Eureka的不同,nacos-client同样也是连接到某一个server节点上,当有新服务实例注册或者某实例下线时,server会将信息同步给其他server,而server不需要将心跳信息等同步给其他节点,为什么可以做到不同步心跳呢?这是因为Nacos的server端通过DistroFilter实现了对groupedServiceName的哈希处理,以此实现了服务的分配,当心跳提交到某一server,而server判断该服务实例不由自己处理时,会将其转发到对应的server节点,这就完美解决了Eureka中集群规模增大后的巨量心跳数据同步问题.</font> <br>
+
+但这种设计也有其局限性,比如在server某节点宕机时,那么原本的哈希分配结果就会被打乱,需要重新hash.
 
 
 
