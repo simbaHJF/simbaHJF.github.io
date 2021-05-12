@@ -48,6 +48,13 @@ ConcurrentHashMap使用分段锁技术,将整个数据结构分段(默认为16�
 > get操作和put操作类似,也是要两次hash.但是get操作的concurrenthashmap不需要加锁,原因是将存储元素都标记了volatile
 
 
+<br>
+**<font size="5">扩容</font>** <br>
+
+调用concurrentHashMap的put方法最终会传递到调用对应segment的put方法,在put后判断大于阈值需要进行扩容,也即rehash方法.该方法中oldTable中元素转移到newTable中采用的是对entry的clone(以旧元素相关值创建新entry放入newTable对应位置),而不是指针的修改,这样避免在并发访问时造成读数据操作的问题.
+
+
+
 
 <br>
 **<font size="5">size过程</font>** <br>
@@ -373,3 +380,4 @@ final Node<K,V>[] helpTransfer(Node<K,V>[] tab, Node<K,V> f) {
 3. 扩容时将原table的所有桶倒序分配,每个线程每次最小分配16个桶,防止资源竞争导致的效率下降.单个桶内元素的迁移是加锁的,但桶范围处理分配可以多线程,在没有迁移完成所有桶之前每个线程需要重复获取迁移桶范围,直至所有桶迁移完成
 4. 一个旧桶内的数据迁移完成但不是所有桶都迁移完成时,查询数据委托给ForwardingNode结点查询nextTable完成(find方法）
 5. 迁移过程中sizeCtl用于记录参与扩容线程的数量,全部迁移完成后sizeCtl更新为新table容量的0.75倍
+6. 同JDK7中的思想类似,迁移过程中同样也是采用的node的clone方式而不是直接修改指针结构,以避免迁移过程中并发读访问造成问题.
