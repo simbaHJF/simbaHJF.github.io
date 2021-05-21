@@ -97,7 +97,7 @@ Sentinel以默认每10秒一次的频率通过命令连接向从服务器发送I
 <br>
 **<font size="4">Sentinel向主服务器和从服务器发送信息</font>** <br>
 
-默认情况下,Sentinel会以每两秒一次的频率,通过命令连接向所有被监视主服务器和从服务器的\_sentinel\相关命令以传递信息
+默认情况下,Sentinel会以每两秒一次的频率,通过命令连接向所有被监视主服务器和从服务器的\_sentinel\_相关命令以传递信息
 [![6xvwND.png](https://z3.ax1x.com/2021/03/27/6xvwND.png)](https://imgtu.com/i/6xvwND)
 
 

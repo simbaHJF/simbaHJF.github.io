@@ -235,4 +235,6 @@ Redis集群中的节点分为主节点(master)和从节点(slave),其中主节�
 
 <font color="red">这个选举新主节点的方法和选举领头Sentinel的方法非常相似,因为两者都是基于Raft算法的领头选举方法来实现的;而集群中各个节点信息的同步和Sentinel也相似,都是采用gossip协议方式.</font> <br>
 
-<font color="red">而cluster下,监控负责处理槽的主节点是否下线这个工作,是由集群当中其他负责处理槽的主节点来执行的,其实也就是master间互相监控,这时各个master又相当于Sentinel模式下的Sentinel集群,负责监控,这里它们只负责监控,然后对下线的进行消息发布,而故障转移和新master选举,是在故障master对应的这个master-slave小集群内完成的,不是其他master节点来控制的.为什么这么设计呢,我觉得是因为,master-slave这个小集群内,节点数较少,选举完成的很快速,而整个cluster集群,master节点可能很多,这么多节点来完成raft协议的选举,就很慢了.而Sentinel模式下,Sentinel节点数也不会很多,因此由他们来做选举,是ok的.</font>
+<font color="red">而cluster下,监控负责处理槽的主节点是否下线这个工作,是由集群当中其他负责处理槽的主节点来执行的,其实也就是master间互相监控,这时各个master又相当于Sentinel模式下的Sentinel集群,负责监控,以及从故障下线的主节点下对应的master-slave小集群下选出新master节点.</font> <br>
+
+<font color="red">在cluster模式下,负责处理槽的master节点负责对于该槽所有读写请求的处理,其slave节点默认下是不处理请求的,即便是读请求,slave更多的是做高可用的保障.如果一定要slave节点能够处理读请求,需要向其发送readonly命令,使其能够处理读请求,但cluster模式下,redis对该方式的支持并不提倡,而是建议通过扩展更多的master节点来提高并发.</font>
