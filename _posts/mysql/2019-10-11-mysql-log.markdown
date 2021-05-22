@@ -75,7 +75,9 @@ update T set c=c+1 where ID=2;
 下面是这个update语句的执行流程图,图中浅色框表示是在InnoDB内部执行的,深色框表示是在执行器中执行的:
 ![nbCiid.png](https://s2.ax1x.com/2019/09/19/nbCiid.png)
 
-上述执行过程将redo log的写入拆成了两个步骤:prepare和commit,这就是"两阶段提交".
+上述执行过程将redo log的写入拆成了两个步骤:prepare和commit,这就是"两阶段提交".<br>
+
+<font color="red">注意,上述过程是对主键索引的更新流程,若是普通索引且非唯一索引,则可能用到change buffer机制,从而要更新的记录页不在内存中时,并不立即读入,而是依赖change buffer机制</font><br>
 
 
 <br>

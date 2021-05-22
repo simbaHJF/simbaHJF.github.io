@@ -45,7 +45,7 @@ change buffer实际上是可以持久化的数据.也就是说,change buffer在�
 ##	change buffer的使用场景
 merge的时候是真正进行数据更新的时刻,而change buffer的主要目的就是将记录的变更动作缓存下来,所以在一个数据页做merge之前,change buffer记录的变更越多,收益就越大.因此,对于写多读少的业务来说,页在写完以后马上被访问的概率比较小,此时change buffer的使用效果最好.这种业务模型常见的就是账单类,日志类的系统.
 
-反过来,假设一个业务的更新模式是写入之后马上做查询,那么即使满足了条件,将更新先记录在change buffer,但之后由于马上要访问这个数据页,会立即触发merge过程.这样随机访问的IO次数不会减少,反而增加了change buffer的维护代价.所以,这种业务场景下,change buffer反而起到了反作用.
+反过来,假设一个业务的更新模式是写入之后马上做查询,那么即使满足了条件,将更新先记录在change buffer,但之后由于马上要访问这个数据页,会立即触发merge过程.这样随机访问的IO次数不会减少,反而增加了change buffer的维护代价.所以,这种业务场景下,change buffer反而起到了反作用.因此,这时应该关闭change buffer.
 
 
 
