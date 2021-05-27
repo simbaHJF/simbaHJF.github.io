@@ -149,3 +149,120 @@ put时队列满则阻塞,通过notFull(Condition类型)来进行控制.<br>
 <br>
 **<font size="4">SynchronousQueue</font>** <br>
 
+SynchronousQueue 是一个没有数据缓冲的BlockingQueue,它内部没有容器,一个生产线程,当它生产产品(即put 或offer 的时候),如果当前没有人想要消费产品(即当前没有线程执行take),此时生产线程会有两种情况
+*  阻塞,等待一个消费线程调用take操作,take操作将会唤醒该生产线程,同时消费线程会获取生产线程的产品(即数据传递),这样的一个过程称为一次配对过程(当然也可以先take后put,原理是一样的)
+*  立即返回失败
+
+来看下源码
+```
+public boolean offer(E e) {
+    if (e == null) throw new NullPointerException();
+    return transferer.transfer(e, true, 0) != null;
+}
+
+E transfer(E e, boolean timed, long nanos) {
+    /* Basic algorithm is to loop trying to take either of
+     * two actions:
+     *
+     * 1. If queue apparently empty or holding same-mode nodes,
+     *    try to add node to queue of waiters, wait to be
+     *    fulfilled (or cancelled) and return matching item.
+     *
+     * 2. If queue apparently contains waiting items, and this
+     *    call is of complementary mode, try to fulfill by CAS'ing
+     *    item field of waiting node and dequeuing it, and then
+     *    returning matching item.
+     *
+     * In each case, along the way, check for and try to help
+     * advance head and tail on behalf of other stalled/slow
+     * threads.
+     *
+     * The loop starts off with a null check guarding against
+     * seeing uninitialized head or tail values. This never
+     * happens in current SynchronousQueue, but could if
+     * callers held non-volatile/final ref to the
+     * transferer. The check is here anyway because it places
+     * null checks at top of loop, which is usually faster
+     * than having them implicitly interspersed.
+     */
+    QNode s = null; // constructed/reused as needed
+    boolean isData = (e != null);
+    for (;;) {
+        QNode t = tail;
+        QNode h = head;
+        if (t == null || h == null)         // saw uninitialized value
+            continue;                       // spin
+        if (h == t || t.isData == isData) { // empty or same-mode
+            QNode tn = t.next;
+            if (t != tail)                  // inconsistent read
+                continue;
+            if (tn != null) {               // lagging tail
+                advanceTail(t, tn);
+                continue;
+            }
+            // 1. 此处条件会按是否允许超时和超时时长两个参数判断是否立即返回null,代表失败
+            if (timed && nanos <= 0)        // can't wait
+                return null;
+            if (s == null)
+                s = new QNode(e, isData);
+            if (!t.casNext(null, s))        // failed to link in
+                continue;
+            advanceTail(t, s);              // swing tail and wait
+            // 2. 此处会阻塞
+            Object x = awaitFulfill(s, e, timed, nanos);
+            if (x == s) {                   // wait was cancelled
+                clean(t, s);
+                return null;
+            }
+            if (!s.isOffList()) {           // not already unlinked
+                advanceHead(t, s);          // unlink if head
+                if (x != null)              // and forget fields
+                    s.item = s;
+                s.waiter = null;
+            }
+            return (x != null) ? (E)x : e;
+        } else {                            // complementary-mode
+            QNode m = h.next;               // node to fulfill
+            if (t != tail || m == null || h != head)
+                continue;                   // inconsistent read
+            Object x = m.item;
+            if (isData == (x != null) ||    // m already fulfilled
+                x == m ||                   // m cancelled
+                !m.casItem(x, e)) {         // lost CAS
+                advanceHead(h, m);          // dequeue and retry
+                continue;
+            }
+            advanceHead(h, m);              // successfully fulfilled
+            LockSupport.unpark(m.waiter);
+            return (x != null) ? (E)x : e;
+        }
+    }
+}
+```
+
+由1,2两点可以看出其两种返回方式.再结合线程池源码,当没有空闲worker线程来处理提交的任务时,它会从workQueue.offer(command)处失败,而当无法再增加worker线程数的时候,它会从reject方法返回,也就是走拒绝策略
+```
+public void execute(Runnable command) {
+    if (command == null)
+        throw new NullPointerException();
+    int c = ctl.get();
+    if (workerCountOf(c) < corePoolSize) {
+        if (addWorker(command, true))
+            return;
+        c = ctl.get();
+    }
+    if (isRunning(c) && workQueue.offer(command)) {
+        int recheck = ctl.get();
+        if (! isRunning(recheck) && remove(command))
+            reject(command);
+        else if (workerCountOf(recheck) == 0)
+            addWorker(null, false);
+    }
+    else if (!addWorker(command, false))
+        reject(command);
+}
+```
+
+Dubbo中默认下采用的是FixedThreadPool,该线程池中在Dubbo默认参数下,采用的就是SynchronousQueue队列,当dubbo的工作线程全都没有空闲时,其就会将请求立即拒绝,也就是常见的Dubbo线程打满的现象,之后该请求可通过失败重试再次尝试请求.
+
+[![2itkxH.png](https://z3.ax1x.com/2021/05/27/2itkxH.png)](https://imgtu.com/i/2itkxH)
