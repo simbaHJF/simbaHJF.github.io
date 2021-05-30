@@ -159,7 +159,7 @@ protected void prepareBeanFactory(ConfigurableListableBeanFactory beanFactory) {
 ##	3.	postProcessBeanFactory(beanFactory);
 
 允许在上下文子类中对beanFactory进行后处理.  
-标准化初始化后,修改应用程序上下文的内部bean工厂.在那时候,所有bean定义都将已经被加载完成,但还未实例化任何bean.简言之,BeanFactory的后置处理器可以修改BeanDefinition的属性信息.
+标准化初始化后,修改应用程序上下文的内部bean工厂.BeanFactory的后置处理器可以修改BeanDefinition的属性信息.
 
 ##	4.	invokeBeanFactoryPostProcessors(beanFactory);(重点方法)
 
@@ -326,11 +326,19 @@ public static void invokeBeanFactoryPostProcessors(
 }
 ```
 
-这里重点是invokeBeanDefinitionRegistryPostProcessors方法的执行,可以看到它有多处执行过程.简单总结一下就是:
+该方法传入的beanFactory为DefaultListableBeanFactory实现了BeanDefinitionRegistry接口,因此会进入if分支,beanFactoryPostProcessors为初始ApplicationContextInitializer中加入的BeanFactoryPostProcessor列表.方法整体流程总结如下:
+1. 先处理BeanDefinitionRegistryPostProcessor实现类,调用其postProcessBeanDefinitionRegistry方法,顺序为
+	1. beanFactoryPostProcessors中的处理器
+	2. 其他处理器,实现了PriorityOrdered接口的,排序
+	3. 其他处理器,实现了Ordered接口的,排序
+	4. 其他处理器,余下的,排序
+2. 再处理余下的BeanFactoryPostProcessor实现类,调用postProcessBeanFactory方法.(BeanFactoryPostProcessor是上面BeanDefinitionRegistryPostProcessor的父接口),顺序为
+	1. beanFactoryPostProcessors中的处理器
+	2. 其他处理器,实现了PriorityOrdered接口的,排序
+	3. 其他处理器,实现了Ordered接口的,排序
+	4. 其他处理器,余下的,排序
 
-这里会获取BeanDefinitionRegistryPostProcessor,然后按照一定的要求和先后顺序,一部分一部分的将其添加到currentRegistryProcessors中来执行.  
-当前一部分BeanDefinitionRegistryPostProcessor执行完成后,清空currentRegistryProcessors,然后再获取下一部分BeanDefinitionRegistryPostProcessor来执行处理.  
-因此BeanDefinitionRegistryPostProcessor的执行是有优先级先后顺序的.
+
 
 **<font color="red">这里最重要的一个BeanDefinitionRegistryPostProcessor是ConfigurationClassPostProcessor,它实现了PriorityOrdered,是优先执行的一个BeanDefinitionRegistryPostProcessor.ConfigurationClassPostProcessor中完成了BeanDefinition的扫描解析和注册工作.</font>**
 
@@ -661,7 +669,7 @@ debug,跟进scanner.doScan方法,会来到如下代码段:
 	<br>
 	1.	由上面debug显示,packageSearchPath = "classpath*:com/simba/springbootstudy/**/*.class",所以扫描的路径是匹配前面字符串正则的路径.
 	<br>
-	2.	如果主类上配置了@ComponentScan注解,那么就不会按主类所在包路径去生成扫描路径的正则字符串,因此这里如果不注意的话会造成一切bean扫描不到的报错情况,需要注意.这一点看后面的举例说明.
+	2.	如果主类上配置了@ComponentScan注解,那么就不会按主类所在包路径去生成扫描路径的正则字符串,因此这里如果不注意的话会造成一些bean扫描不到的报错情况,需要注意.这一点看后面的举例说明.
 </font>
 
 

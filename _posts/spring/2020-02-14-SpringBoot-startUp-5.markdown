@@ -344,4 +344,14 @@ protected List<AutoConfigurationImportFilter> getAutoConfigurationImportFilters(
 
 
 
-springboot的自动装配至此分析完成.
+springboot的自动装配至此分析完成.<br>
+
+
+这里总结一下大体过程就是:
+1. 项目主类上会有@SpringBootApplication注解
+2. @SpringBootApplication注解内部包含@EnableAutoConfiguration注解
+3. @EnableAutoConfiguration注解中有@Import(AutoConfigurationImportSelector.class)这一import标记
+4. 在BeanDefinition解析时会有切入点,调用到AutoConfigurationImportSelector内部类AutoConfigurationGroup的process方法
+5. 在process方法中,底层通过SPI机制将各个spring.factories文件中EnableAutoConfiguration的实现类全限定名获取到,然后将其放入configurationClasses中,表示配置类
+6. ConfigurationClassPostProcessor在进行parse处理时,会将configurationClasses中的各个类解析为BeanDefinition注册到容器中
+7. 各个外部starter的配置类至此可以生效了.

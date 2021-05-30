@@ -55,7 +55,7 @@ public ConfigurableApplicationContext run(String... args) {
 		exceptionReporters = getSpringFactoriesInstances(SpringBootExceptionReporter.class,
 				new Class[] { ConfigurableApplicationContext.class }, context);
 
-		//刷新应用上下文前的准备阶段
+		//刷新应用上下文前的准备阶段,在这里完成了对主类BeanDefinition的注册
 		prepareContext(context, environment, listeners, applicationArguments, printedBanner);
 
 		//刷新应用上下文
@@ -281,7 +281,79 @@ public GenericApplicationContext() {
 }
 ```
 
-``context就是我们熟悉的上下文(也有人称之为容器,都可以,看个人爱好和理解),而beanFactory就是我们所说的IoC容器的真实面孔了.``
+``context就是我们熟悉的上下文(也有人称之为容器,都可以,看个人爱好和理解),而beanFactory就是我们所说的IoC容器的真实面孔了.`` <br>
+
+另外这里还有一处重点,在AnnotationConfigServletWebServerApplicationContext构造方法中会创建AnnotatedBeanDefinitionReader对象,创建AnnotatedBeanDefinitionReader对象底层会调用AnnotationConfigUtils.registerAnnotationConfigProcessors(this.registry)方法,该方法中会注册一些很重要的Processor进来.比如ConfigurationClassPostProcessor,它是完成BeanDefinition解析载入和注册的关键.
+
+```
+public AnnotationConfigServletWebServerApplicationContext() {
+	this.reader = new AnnotatedBeanDefinitionReader(this);
+	this.scanner = new ClassPathBeanDefinitionScanner(this);
+}
+
+public AnnotatedBeanDefinitionReader(BeanDefinitionRegistry registry, Environment environment) {
+	Assert.notNull(registry, "BeanDefinitionRegistry must not be null");
+	Assert.notNull(environment, "Environment must not be null");
+	this.registry = registry;
+	this.conditionEvaluator = new ConditionEvaluator(registry, environment, null);
+	AnnotationConfigUtils.registerAnnotationConfigProcessors(this.registry);
+}
+
+public static Set<BeanDefinitionHolder> registerAnnotationConfigProcessors(
+		BeanDefinitionRegistry registry, @Nullable Object source) {
+	DefaultListableBeanFactory beanFactory = unwrapDefaultListableBeanFactory(registry);
+	if (beanFactory != null) {
+		if (!(beanFactory.getDependencyComparator() instanceof AnnotationAwareOrderComparator)) {
+			beanFactory.setDependencyComparator(AnnotationAwareOrderComparator.INSTANCE);
+		}
+		if (!(beanFactory.getAutowireCandidateResolver() instanceof ContextAnnotationAutowireCandidateResolver)) {
+			beanFactory.setAutowireCandidateResolver(new ContextAnnotationAutowireCandidateResolver());
+		}
+	}
+	Set<BeanDefinitionHolder> beanDefs = new LinkedHashSet<>(8);
+	if (!registry.containsBeanDefinition(CONFIGURATION_ANNOTATION_PROCESSOR_BEAN_NAME)) {
+		RootBeanDefinition def = new RootBeanDefinition(ConfigurationClassPostProcessor.class);
+		def.setSource(source);
+		beanDefs.add(registerPostProcessor(registry, def, CONFIGURATION_ANNOTATION_PROCESSOR_BEAN_NAME));
+	}
+	if (!registry.containsBeanDefinition(AUTOWIRED_ANNOTATION_PROCESSOR_BEAN_NAME)) {
+		RootBeanDefinition def = new RootBeanDefinition(AutowiredAnnotationBeanPostProcessor.class);
+		def.setSource(source);
+		beanDefs.add(registerPostProcessor(registry, def, AUTOWIRED_ANNOTATION_PROCESSOR_BEAN_NAME));
+	}
+	// Check for JSR-250 support, and if present add the CommonAnnotationBeanPostProcessor.
+	if (jsr250Present && !registry.containsBeanDefinition(COMMON_ANNOTATION_PROCESSOR_BEAN_NAME)) {
+		RootBeanDefinition def = new RootBeanDefinition(CommonAnnotationBeanPostProcessor.class);
+		def.setSource(source);
+		beanDefs.add(registerPostProcessor(registry, def, COMMON_ANNOTATION_PROCESSOR_BEAN_NAME));
+	}
+	// Check for JPA support, and if present add the PersistenceAnnotationBeanPostProcessor.
+	if (jpaPresent && !registry.containsBeanDefinition(PERSISTENCE_ANNOTATION_PROCESSOR_BEAN_NAME)) {
+		RootBeanDefinition def = new RootBeanDefinition();
+		try {
+			def.setBeanClass(ClassUtils.forName(PERSISTENCE_ANNOTATION_PROCESSOR_CLASS_NAME,
+					AnnotationConfigUtils.class.getClassLoader()));
+		}
+		catch (ClassNotFoundException ex) {
+			throw new IllegalStateException(
+					"Cannot load optional framework class: " + PERSISTENCE_ANNOTATION_PROCESSOR_CLASS_NAME, ex);
+		}
+		def.setSource(source);
+		beanDefs.add(registerPostProcessor(registry, def, PERSISTENCE_ANNOTATION_PROCESSOR_BEAN_NAME));
+	}
+	if (!registry.containsBeanDefinition(EVENT_LISTENER_PROCESSOR_BEAN_NAME)) {
+		RootBeanDefinition def = new RootBeanDefinition(EventListenerMethodProcessor.class);
+		def.setSource(source);
+		beanDefs.add(registerPostProcessor(registry, def, EVENT_LISTENER_PROCESSOR_BEAN_NAME));
+	}
+	if (!registry.containsBeanDefinition(EVENT_LISTENER_FACTORY_BEAN_NAME)) {
+		RootBeanDefinition def = new RootBeanDefinition(DefaultEventListenerFactory.class);
+		def.setSource(source);
+		beanDefs.add(registerPostProcessor(registry, def, EVENT_LISTENER_FACTORY_BEAN_NAME));
+	}
+	return beanDefs;
+}
+```
 
 
 ##	4.	刷新应用上下文前的准备阶段
@@ -366,7 +438,7 @@ protected void load(ApplicationContext context, Object[] sources) {
 
 ###	4.1	createBeanDefinitionLoader
 
-先来看下该方法所需的第一个参数,也就是BeanDefinitionRegistry的获取方式
+先来看下该方法所需的第一个参数,也就是BeanDefinitionRegistry的获取方法
 ```
 /**
  * Get the bean definition registry.

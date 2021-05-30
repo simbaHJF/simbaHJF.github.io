@@ -34,6 +34,7 @@ public void refresh() throws BeansException, IllegalStateException {
 			invokeBeanFactoryPostProcessors(beanFactory);
 
 			// Register bean processors that intercept bean creation.
+			// 注册BeanPostProcessor,并通过beanFactory.getBean方法生成BeanPostProcessor对应的bean
 			registerBeanPostProcessors(beanFactory);
 
 			// Initialize message source for this context.
@@ -94,7 +95,7 @@ public void refresh() throws BeansException, IllegalStateException {
 
 
 下面再来说一下这两个重要的BeanPostProcessor是什么时候以BeanDefinition的形式注册到registry中的.  
-先给出结论:AnnotationConfigServletWebServerApplicationContext时
+先给出结论:AnnotationConfigServletWebServerApplicationContext创建时
 
 来看下其构造方法
 ```
@@ -178,8 +179,8 @@ public static Set<BeanDefinitionHolder> registerAnnotationConfigProcessors(
 这里有几个关键点:  
 
 *	设置beanFactory,也就是DefaultListableBeanFactory的autowireCandidateResolver为ContextAnnotationAutowireCandidateResolver(它是QualifierAnnotationAutowireCandidateResolver的子类,在QualifierAnnotationAutowireCandidateResolver父类中,有负责@Qualifier和@Value两个注解的处理的逻辑)
-*	注册了AutowiredAnnotationBeanPostProcessor的BeanDefinition,以便于后面根据BeanDefinition来生成这两个Bean.
-*	注册了CommonAnnotationBeanPostProcessor的BeanDefinition,以便于后面根据BeanDefinition来生成这两个Bean.
+*	注册AutowiredAnnotationBeanPostProcessor的BeanDefinition,以便于后面根据BeanDefinition来生成这个Bean.
+*	注册CommonAnnotationBeanPostProcessor的BeanDefinition,以便于后面根据BeanDefinition来生成这个Bean.
 
 
 ##	二.	finishBeanFactoryInitialization(beanFactory);
@@ -892,7 +893,7 @@ getInstantiationStrategy()方法获取到CglibSubclassingInstantiationStrategy�
 ```
 public Object instantiate(RootBeanDefinition bd, @Nullable String beanName, BeanFactory owner) {
 	// Don't override the class with CGLIB if no overrides.
-	// 如果BeanDefinition中没有包含了重写的方法(也即bean没有需要动态替换的方法),则使用CGLIB,否则使用BeanUtils(也就是java反射)
+	// 如果BeanDefinition中没有包含了重写的方法(也即bean没有需要动态替换的方法),则使用BeanUtils(也就是java反射),否则使用CGLIB
 	if (!bd.hasMethodOverrides()) {
 		Constructor<?> constructorToUse;
 		synchronized (bd.constructorArgumentLock) {
@@ -1021,7 +1022,7 @@ protected void populateBean(String beanName, RootBeanDefinition mbd, @Nullable B
 ```
 
 这里说一下几个关键点:  
-1.	A处代码,和B处代码的applyPropertyValues()方法基本都是用于SpringMVC中采用xml配置Bean的方法,这里就不在深入介绍了,只需知道一点,xml解析bean的时候,是将xml中配置的属性依赖解析到BeanDefinition中的PropertyValues,然后再依赖PropertyValues中的数据来完成依赖注入的,而注解方式的依赖注入则不是.
+1.	A处代码,和B处代码的applyPropertyValues()方法基本都是用于SpringMVC中采用xml配置Bean的方法,这里就不在深入介绍了,只需知道一点,xml解析bean的时候,是将xml中配置的属性依赖解析到BeanDefinition中的PropertyValues,然后再依赖PropertyValues中的数据来完成依赖注入的,而注解方式的依赖注入则不同.
 2.	C处代码pvs = ibp.postProcessPropertyValues(pvs, filteredPds, bw.getWrappedInstance(), beanName);这行是真正采用@Autowire @Resource @Value @Inject 等注解的依赖注入过程.
 
 
