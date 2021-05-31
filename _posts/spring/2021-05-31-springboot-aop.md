@@ -137,6 +137,74 @@ private static BeanDefinition registerOrEscalateApcAsRequired(
 ## <span id="jump2">二. AnnotationAwareAspectJAutoProxyCreator类分析</span>
 
 先来看下AnnotationAwareAspectJAutoProxyCreator类的继承关系
-[![2mFo7D.png](https://z3.ax1x.com/2021/05/31/2mFo7D.png)](https://imgtu.com/i/2mFo7D)
+[![2mT1HK.png](https://z3.ax1x.com/2021/06/01/2mT1HK.png)](https://imgtu.com/i/2mT1HK)
 
-可见AnnotationAwareAspectJAutoProxyCreator类实现了BeanPostProcessor接口,那么就好办了,接下来就可以分析其相应的切入方法了.
+可见AnnotationAwareAspectJAutoProxyCreator类实现了BeanPostProcessor接口,那么就好办了,接下来就可以分析其相应的切入方法了.<br>
+
+来看下它对postProcessAfterInitialization方法的实现
+```
+public Object postProcessAfterInitialization(@Nullable Object bean, String beanName) {
+    if (bean != null) {
+        Object cacheKey = getCacheKey(bean.getClass(), beanName);
+        if (this.earlyProxyReferences.remove(cacheKey) != bean) {
+            return wrapIfNecessary(bean, beanName, cacheKey);
+        }
+    }
+    return bean;
+}
+
+
+protected Object wrapIfNecessary(Object bean, String beanName, Object cacheKey) {
+    if (StringUtils.hasLength(beanName) && this.targetSourcedBeans.contains(beanName)) {
+        return bean;
+    }
+    if (Boolean.FALSE.equals(this.advisedBeans.get(cacheKey))) {
+        return bean;
+    }
+    if (isInfrastructureClass(bean.getClass()) || shouldSkip(bean.getClass(), beanName)) {
+        this.advisedBeans.put(cacheKey, Boolean.FALSE);
+        return bean;
+    }
+    // Create proxy if we have advice.
+    // 1.
+    Object[] specificInterceptors = getAdvicesAndAdvisorsForBean(bean.getClass(), beanName, null);
+    if (specificInterceptors != DO_NOT_PROXY) {
+        this.advisedBeans.put(cacheKey, Boolean.TRUE);
+        Object proxy = createProxy(
+                bean.getClass(), beanName, specificInterceptors, new SingletonTargetSource(bean));
+        this.proxyTypes.put(cacheKey, proxy.getClass());
+        return proxy;
+    }
+    this.advisedBeans.put(cacheKey, Boolean.FALSE);
+    return bean;
+}
+```
+
+wrapIfNecessary方法为核心方法,其核心流程如下:
+* 获取当前bean所适用的advisor列表
+* 如果拦截器列表为空,说明当前bean不需要进行aop增强,那么直接返回原始bean
+* 如果拦截器列表不为空,说明当前bean需要进行aop增强,那么为它生成代理对象返回,生成代理对象的方式无非就是jdk proxy或者是cglib proxy两种方式,根据bean的情况具体判断.
+
+而getAdvicesAndAdvisorsForBean用于获取可用advisor列表,其内部逻辑就是首先获取所有的candidateAdvisors,然后遍历,用每一个Advisor和被代理类中的所有方法进行匹配,只要有一个匹配到,就意味着该类会被代理.<br>
+
+接下来就是通过createProxy方法来生成代理类了,深入方法内部,关键方法如下:
+```
+public AopProxy createAopProxy(AdvisedSupport config) throws AopConfigException {
+    if (config.isOptimize() || config.isProxyTargetClass() || hasNoUserSuppliedProxyInterfaces(config)) {
+        Class<?> targetClass = config.getTargetClass();
+        if (targetClass == null) {
+            throw new AopConfigException("TargetSource cannot determine target class: " +
+                    "Either an interface or a target is required for proxy creation.");
+        }
+        if (targetClass.isInterface() || Proxy.isProxyClass(targetClass)) {
+            return new JdkDynamicAopProxy(config);
+        }
+        return new ObjenesisCglibAopProxy(config);
+    }
+    else {
+        return new JdkDynamicAopProxy(config);
+    }
+}
+```
+
+proxyTargetClass在前面配置类AopAutoConfiguration中指定,默认为true.因此,这个方法整体只有一种情况会走jdk代理方法,就是代理类为接口类型(<font color="red">注意,代理类是接口,并不是指该类是否实现了接口</font>)或者代理类是Proxy类型,否则全部走cglib代理.所以,在平时使用时,代理类大部分还是用cglib的方式来生成的.<br>
