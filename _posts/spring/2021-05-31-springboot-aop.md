@@ -185,7 +185,7 @@ wrapIfNecessary方法为核心方法,其核心流程如下:
 * 如果拦截器列表为空,说明当前bean不需要进行aop增强,那么直接返回原始bean
 * 如果拦截器列表不为空,说明当前bean需要进行aop增强,那么为它生成代理对象返回,生成代理对象的方式无非就是jdk proxy或者是cglib proxy两种方式,根据bean的情况具体判断.
 
-而getAdvicesAndAdvisorsForBean用于获取可用advisor列表,其内部逻辑就是首先获取所有的candidateAdvisors,然后遍历,用每一个Advisor和被代理类中的所有方法进行匹配,只要有一个匹配到,就意味着该类会被代理.<br>
+而getAdvicesAndAdvisorsForBean用于获取适用的advisor列表,其内部逻辑就是首先获取所有的candidateAdvisors,然后遍历,用每一个Advisor和被代理类中的所有方法进行匹配,只要有一个匹配到,就意味着该类应该被代理,否则该类不需要被代理.<br>
 
 接下来就是通过createProxy方法来生成代理类了,深入方法内部,关键方法如下:
 ```
@@ -208,3 +208,58 @@ public AopProxy createAopProxy(AdvisedSupport config) throws AopConfigException 
 ```
 
 proxyTargetClass在前面配置类AopAutoConfiguration中指定,默认为true.因此,这个方法整体只有一种情况会走jdk代理方法,就是代理类为接口类型(<font color="red">注意,代理类是接口,并不是指该类是否实现了接口</font>)或者代理类是Proxy类型,否则全部走cglib代理.所以,在平时使用时,代理类大部分还是用cglib的方式来生成的.<br>
+
+JdkDynamicAopProxy实现了InvocationHandler接口,其核心逻辑在于invoke方法;CglibAopProxy中有内部类DynamicAdvisedInterceptor,DynamicAdvisedInterceptor实现了MethodInterceptor接口,其核心逻辑在于intercept方法.因此两种代理方式中,InvocationHandler接口可类比MethodInterceptor接口,对应的invoke方法类比intercept方法,内部逻辑是相似的.<br>
+
+
+下面以CglibAopProxy代理方式简要分析下代理执行流程,首先放上DynamicAdvisedInterceptor的核心方法intercept的源码
+```
+public Object intercept(Object proxy, Method method, Object[] args, MethodProxy methodProxy) throws Throwable {
+    Object oldProxy = null;
+    boolean setProxyContext = false;
+    Object target = null;
+    TargetSource targetSource = this.advised.getTargetSource();
+    try {
+        if (this.advised.exposeProxy) {
+            // Make invocation available if necessary.
+            oldProxy = AopContext.setCurrentProxy(proxy);
+            setProxyContext = true;
+        }
+        // Get as late as possible to minimize the time we "own" the target, in case it comes from a pool...
+        target = targetSource.getTarget();
+        Class<?> targetClass = (target != null ? target.getClass() : null);
+        List<Object> chain = this.advised.getInterceptorsAndDynamicInterceptionAdvice(method, targetClass);
+        Object retVal;
+        // Check whether we only have one InvokerInterceptor: that is,
+        // no real advice, but just reflective invocation of the target.
+        if (chain.isEmpty() && Modifier.isPublic(method.getModifiers())) {
+            // We can skip creating a MethodInvocation: just invoke the target directly.
+            // Note that the final invoker must be an InvokerInterceptor, so we know
+            // it does nothing but a reflective operation on the target, and no hot
+            // swapping or fancy proxying.
+            Object[] argsToUse = AopProxyUtils.adaptArgumentsIfNecessary(method, args);
+            retVal = methodProxy.invoke(target, argsToUse);
+        }
+        else {
+            // We need to create a method invocation...
+            retVal = new CglibMethodInvocation(proxy, target, method, args, targetClass, chain, methodProxy).proceed();
+        }
+        retVal = processReturnType(proxy, target, method, retVal);
+        return retVal;
+    }
+    finally {
+        if (target != null && !targetSource.isStatic()) {
+            targetSource.releaseTarget(target);
+        }
+        if (setProxyContext) {
+            // Restore old proxy.
+            AopContext.setCurrentProxy(oldProxy);
+        }
+    }
+}
+```
+
+流程如下:
+1. 获取代理逻辑责任链
+2. 如果责任链为空,那么该方法不需要执行代理逻辑,直接调用源对象target的对应方法即可
+3. 如果责任链不为空,那么该方法需要被代理,责任链方式执行代理方法及源对象target的对应方法.
