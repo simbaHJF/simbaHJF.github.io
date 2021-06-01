@@ -39,7 +39,9 @@ tags:
 当Broker接收到生产者发送来的消息时,首先第一步,它会把这个消息直接写入磁盘上的一个日志文件,叫做<font color="red">CommitLog</font>.直接顺序写入,如下图:
 [![cJYj3D.png](https://z3.ax1x.com/2021/04/08/cJYj3D.png)](https://imgtu.com/i/cJYj3D)
 
-CommitLog是很多磁盘文件,每个文件限定最多1G,Broker收到消息之后就直接追加写入这个文件的末尾,如果一个CommitLog写满了1G,就会创建一个新的CommitLog文件.
+CommitLog是很多磁盘文件,每个文件限定最多1G,Broker收到消息之后就直接追加写入这个文件的末尾,如果一个CommitLog写满了1G,就会创建一个新的CommitLog文件.RocketMQ 的所有主题的消息都存在 同一CommitLog 中,并不向kafka,以topic-partition来区分.log文件. <br>
+
+文件名以起始偏移量命名,固定 20 位,不足则前面补0,比如 00000000000000000000 代表了第一个文件,第二个文件名就是 00000000001073741824,表明起始偏移量为 1073741824,以这样的方式命名用偏移量就能找到对应的文件.这点与kafka的.log文件命名方式是一致的
 [![cJcfXt.png](https://z3.ax1x.com/2021/04/08/cJcfXt.png)](https://imgtu.com/i/cJcfXt)
 
 
@@ -53,6 +55,8 @@ $HOME/store/consumequeue/{topic}/{queueId}/{fileName}
 
 每个Topic在这台Broker上都会有一些MessageQueue,上面路径中会看到,{topic}指代的就是某个topic,{queueId}指代的就是某个MessageQueue
 [![cJcR1A.png](https://z3.ax1x.com/2021/04/08/cJcR1A.png)](https://imgtu.com/i/cJcR1A)
+
+<font color="red">这里针对上图有一点说明: 在本地测试时,只有一个broker,而RocketMQ默认为每个topic分配4个队列,所以在左下图中看到了4个文件夹.事实上,生产环境中,可能一个broker下的一个topic下只有一个队列文件夹,但文件夹下可能有多个队列文件,因为写满会新建</font> <br>
 
 当Broker收到一条消息,将其写入了CommitLog之后,其实它同时会将这条消息在CommitLog中的物理位置,也就是一个文件偏移量offset,写入到这条消息所属的MessageQueue对应的ConsumeQueue文件中去.<br>
 

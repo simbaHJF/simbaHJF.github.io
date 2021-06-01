@@ -92,7 +92,7 @@ public static void main(String[] args) {
 ```
 
 总结加锁流程如下图,同时在该流程中体现了互斥锁以及可重入锁:
-[![cfKAU0.md.png](https://z3.ax1x.com/2021/04/16/cfKAU0.md.png)](https://imgtu.com/i/cfKAU0)
+[![2KBmWT.png](https://z3.ax1x.com/2021/06/01/2KBmWT.png)](https://imgtu.com/i/2KBmWT)
 
 
 <br>

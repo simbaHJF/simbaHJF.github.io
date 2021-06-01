@@ -52,6 +52,7 @@ Broker和NameServer之间建立心跳机制,Broker定时给所有的NameServer�
 
 NameServer每次收到一个Broker的心跳,就更新一下该Broker的最近一次心跳时间.然后NameServer会每隔10秒进行一次检查,检查各个Broker的最近一次心跳时间,如果某个Broker超过120s都没发送心跳了,那么就认为这个Broker已经挂掉了. <br>
 
+对于provider和consumer,则是通过定时主动请求NameServer拉取broker信息来感知的,因此有一定的延迟.<br>
 
 
 <br><br>
@@ -89,6 +90,12 @@ NameServer每次收到一个Broker的心跳,就更新一下该Broker的最近一
 * RocketMQ 4.5版本之后,提供了一种新机制:Dledger,基于Raft算法.此时一旦Master Broker宕机了,可以通过Dledger进行leader选举,将一个Slave Broker选举为新的Master Broker,然后这个Master Broker就可以对外提供服务了.以此来完成自动的故障转移机制.
 
 <font color="red">简单讲就是,Broker节点开启Dledger机制后,会通过Dledger相关机制,而自动具备了Master Broker故障时通过Raft进行leader选举从而将某个Slave Broker提升为Master的能力,实现自动的故障转移</font><br>
+
+选举投票的范围是在这个broker下的master-slave架构内部进行的.举例来讲,broker-a有三个节点,id分别为1,2,3. <br>
+
+broker-a-1当前为leader,broker-a-2和broker-a-3位follower,某刻leader也就是broker-a-1挂了,那么这个小集群内就剩2和3了,它俩内部之间会发起选举从而选出一个称为新的leader.<br>
+
+这里不同于redis的sentinel模式下,先由sentinel集群内部选出一个leader sentinel,用它来完成slave提升为master的操作.也不同于cluster架构下,某个槽的主节点挂了,其下的slave向其他负责处理槽的master发起投票请求.<br>
 
 
 
