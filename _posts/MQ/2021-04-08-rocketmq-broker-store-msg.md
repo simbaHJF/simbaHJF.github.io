@@ -60,7 +60,7 @@ $HOME/store/consumequeue/{topic}/{queueId}/{fileName}
 
 当Broker收到一条消息,将其写入了CommitLog之后,其实它同时会将这条消息在CommitLog中的物理位置,也就是一个文件偏移量offset,写入到这条消息所属的MessageQueue对应的ConsumeQueue文件中去.<br>
 
-<font color="red">所以实际上,ConsumeQueue中存储的是一个一个消息在CommitLog文件中的物理位置,也就是offset.当然,实际上ConsumeQueue中存储的每条数据不只是消息在CommitLog中的offset偏移量,还包含了消息的长度,以及tag hashcode,一条数据是20个字节,每个ConsumeQueue文件保存30万调数据,大约每个文件是5.72M,写满后会新建一个新的ConsumeQueue文件.</font> <br>
+<font color="red">所以实际上,ConsumeQueue中存储的是一个一个消息在CommitLog文件中的物理位置,也就是offset.当然,实际上ConsumeQueue中存储的每条数据不只是消息在CommitLog中的offset偏移量,还包含了消息的长度,以及tag hashcode,一条数据是20个字节(物理消息偏移量8字节,消息大小4字节,tag hashcode 8字节),每个ConsumeQueue文件保存30万调数据,大约每个文件是5.72M,写满后会新建一个新的ConsumeQueue文件.</font> <br>
 
 所以,Topic的每个MessageQueue都对应了Broker机器上的多个ConsumeQueue文件,保存了这个MessageQueue的所有消息在CommitLog文件中的物理位置,也就是offset偏移量.<br>
 
@@ -80,3 +80,5 @@ $HOME/store/consumequeue/{topic}/{queueId}/{fileName}
 * 同步刷盘: 消息写入每次必须刷盘到物理磁盘中完成,才会返回给Producer端ack
 	* 优点: 即便Broker宕机,也不会丢消息
 	* 缺点: 性能急剧降低
+
+<font color="red">这里有一点我个人看法,我认为并不是异步刷盘策略下,master broker宕机了就一定会造成消息丢失,如果配置的消息同步策略是同步复制,那么只有过半slave broker也收到这个消息了(可能slave broker也没刷盘),此时master宕机,从slave选出新的leader后还是有这条消息的,而master和slave都宕机的概率是很低的.当然,这种低概率并不是说就能完全忽视,如果一定要保证绝对不丢,那还是得同步刷盘.但除非是金融级,订单级,支付级的业务,其他真没必要追求如此苛刻的一条消息不丢(这里要强调一个概念,丢消息排除producer上产不恰当,consumer消费不恰当的情况下,只有broker宕机了才有可能出现,正常运行时都不会出现的)</font> <br>

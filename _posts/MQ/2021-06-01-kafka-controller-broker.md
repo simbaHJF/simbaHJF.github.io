@@ -38,7 +38,7 @@ tags:
 <br><br>
 ## <span id="jump1">一. 什么是Controller Broker</span>
 
-在分布式系统中,通常需要有一个协调者,该协调者会在分布式系统发生异常时发挥特殊的作用.在Kafka中该协调者称之为控制器(Controller),其实该控制器并没有什么特殊之处,它本身也是一个普通的Broker,只不过需要负责一些额外的工作(追踪集群中的其他Broker,并在合适的时候处理新加入的和失败的Broker节点、Rebalance分区、分配新的leader分区,leader选举,向其他普通broker同步元数据信息等).值得注意的是 : Kafka集群中始终只有一个Controller Broker
+在分布式系统中,通常需要有一个协调者,该协调者会在分布式系统发生异常时发挥特殊的作用.在Kafka中该协调者称之为控制器(Controller),其实该控制器并没有什么特殊之处,它本身也是一个普通的Broker,只不过需要负责一些额外的工作(追踪集群中的其他Broker,并在合适的时候处理新加入的和失败的Broker节点、分配新的leader分区,leader选举,向其他普通broker同步元数据信息等).值得注意的是 : Kafka集群中始终只有一个Controller Broker
 
 
 

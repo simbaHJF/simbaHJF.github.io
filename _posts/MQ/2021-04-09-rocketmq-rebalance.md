@@ -63,7 +63,7 @@ Broker是通知每个消费者各自Rebalance,即每个消费者自己给自己�
 1. 每个消费者自己给自己分配,如何避免脑裂问题?
 	> 也即因为每个消费者都不知道其他消费者分配的结果,如何确保一个队列不会分给多个消费者呢(因为RocketMQ中的机制,一个MessageQueue规定只能分配给一个消费者,但一个消费者可以被分配多个MessageQueue)
 2. 如果某个消费者没有收到Rebalance通知怎么办?
-	> 这里第二个问题直接回答: 每个消费者都会定时触发Rebalance,以避免Rebalance通知丢失
+	> 这里第二个问题直接回答: 每个消费者都会定时请求NameServer拉取最新Topic路由信息更新自己,还会有另外的一个定时任务RebalanceService周期性触发Rebalance,以避免Rebalance通知丢失
 
 
 <br>
@@ -75,10 +75,34 @@ Broker是通知每个消费者各自Rebalance,即每个消费者自己给自己�
 
 
 <br>
-**<font size="4">RocketMQ Rebalance特点</font>** <br>
+**<font size="4">RocketMQ Rebalance周期性Rebalance源码分析</font>** <br>
 
-只要一个消费者组需要Rebalance,那么这台机器上启动的所有其他消费者,也都要进行Rebalance
+源码如下:
 ```
+public class RebalanceService extends ServiceThread {
+    private static long waitInterval =
+        Long.parseLong(System.getProperty(
+            "rocketmq.client.rebalance.waitInterval", "20000"));
+    private final InternalLogger log = ClientLogger.getLog();
+    private final MQClientInstance mqClientFactory;
+    public RebalanceService(MQClientInstance mqClientFactory) {
+        this.mqClientFactory = mqClientFactory;
+    }
+    @Override
+    public void run() {
+        log.info(this.getServiceName() + " service started");
+        while (!this.isStopped()) {
+            this.waitForRunning(waitInterval);
+            this.mqClientFactory.doRebalance();
+        }
+        log.info(this.getServiceName() + " service end");
+    }
+    @Override
+    public String getServiceName() {
+        return RebalanceService.class.getSimpleName();
+    }
+}
+
 public void doRebalance() {
     //迭代每个consumer，进行rebalance
     for (Map.Entry<String, MQConsumerInner> entry : this.consumerTable.entrySet()) {
@@ -118,7 +142,6 @@ public void doRebalance(final boolean isOrder) {
 }
 ```
 
-而Kafka与RocketMQ不同,Kafka是将所有Topic下的所有队列合并在一起,进行Rebalance.<br>
 
 
 <br>

@@ -178,6 +178,8 @@ public class PullConsumer {
 
 当消费者处理完一批消息后,消费者返回ACK同时会提交目前的一个消费进度到Broker上去,然后Broker会存储该消费组的消费进度,那么下次这个消费组只要再次拉取这个ConsumeQueue的消息,就可以从Broker记录的消费位置开始继续拉取,不用重头拉取了.<br>
 
+rocketMQ consumer端的位移提交时每隔一段时间定时提交的,其client端会缓存消费位移,请求消息时也是根据本地缓存的消费位移来请求broker进行消息拉取的.这块和kafka类似<br>
+
 
 
 <br><br>
