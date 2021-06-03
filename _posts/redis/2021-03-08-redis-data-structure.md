@@ -261,7 +261,7 @@ SDS
 <br>
 **<font size="4">集合对象</font>** <br>
 
-集合对象的编码可以是intset(正数集合)或者hashtable.<br>
+集合对象的编码可以是intset(整数集合)或者hashtable.<br>
 
 编码转换方面当集合对象可以同时满足以下两个条件时,对象使用intset编码:
 
