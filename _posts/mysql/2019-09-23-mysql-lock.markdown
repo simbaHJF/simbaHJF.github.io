@@ -142,7 +142,7 @@ S  | 冲突 | 兼容 |
 **<font size="4">加锁规则总结</font>** <br>
 
 两个"原则",两个"优化"和一个"bug"
-*	原则1:	加锁的基本单位是next-key lock.next-key lock是前开后闭区间.
+*	原则1:	加锁的基本单位是next-key lock.next-key lock是<font color="red">前开后闭区间</font>.
 *	原则2:	查找过程中访问到的对象才会加锁.
 *	优化1:	索引上的等值查询,给唯一索引加锁的时候,next-key lock退化为行锁.(针对唯一索引,且行记录存在)
 *	优化2:	索引上的等值查询,向右遍历时且最后一个值不满足等值条件的时候,next-key lock退化为间隙锁.

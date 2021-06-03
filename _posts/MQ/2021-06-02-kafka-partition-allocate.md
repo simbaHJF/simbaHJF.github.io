@@ -93,7 +93,7 @@ RoundRobinAssignor 分配策略的原理是将消费组内所有消费者及消�
 
 kafka将全部消费组分成多个子集,每个消费组的子集在服务端对应一个GroupCoordinator对其进行管理,GroupCoordinator是kafka服务端中用于管理消费组的组件.而消费者客户端中的ConsumerCoordinator组件负责与GroupCoordinator进行交互.<br>
 
-Consum巳rCoordinator 与 GroupCoordinator 之间最重要的职责就是负责执行消费者再均衡的操作,包括前面提及的分区分配的工作也是在再均衡期间完成的.就目前而言,一共有如下几种情形会触发再均衡的操作:
+ConsumerCoordinator 与 GroupCoordinator 之间最重要的职责就是负责执行消费者再均衡的操作,包括前面提及的分区分配的工作也是在再均衡期间完成的.就目前而言,一共有如下几种情形会触发再均衡的操作:
 * 有新的消费者加入消费组
 * 有消费者宕机下线.消费者并不一定需要真正下线,例如遇到长时间GC,网络延迟导致消费者长时间未向GroupCoordinator发送心跳等情况时,GroupCoordinator会认为消费者已经下线
 * 有消费者主动退出消费组
