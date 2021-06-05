@@ -152,7 +152,7 @@ protected RFuture<Boolean> unlockInnerAsync(long threadId) {
 
 为了解决这个问题,因此有了 Red Lock 算法的出现.<br>
 
-Red Lock的基本思想就是,在前面分析的单机加锁解锁基础上,对master-slave架构下的集群节点进行过半加锁机制,以保证分布式master-slave架构下,即便master节点宕机,也会有锁一致性保证.<br>
+Red Lock的基本思想就是,在前面分析的单机加锁解锁基础上,对多个独立的master节点进行过半加锁机制,以保证一致性.<br>
 
 <font color="red">核心即: 成功加锁的实例数>= N/2 + 1,才认为加锁成功.</font>
 

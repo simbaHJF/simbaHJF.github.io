@@ -77,11 +77,12 @@ MESI协议由来于对Cache Line的四个不同的标记,分别是:
 
 写操作仅在缓存行是已修改或独占状态时可自由执行.如果在共享状态,其他缓存都要先把该缓存行置为无效,这种广播操作称作Request For Ownership (RFO).<br>
 
-<font color="red">所以这里,M和I的区别是,当缓存行为S状态时,发生对其值的修改,那么发起执行修改操作的CPU核心会的缓存行会变为M状态,通过总线嗅探到Cache Line被修改的CPU核心会将自己的对应缓存行状态设置为I</font> <br>
+<font color="red">所以这里,M和I的区别是,当缓存行为S状态时,发生对其值的修改,那么发起执行修改操作的CPU核心首先会通过总线广播使其他核心将该缓存置失效状态,然后该核心中对应缓存行改为E状态,此时可修改,修改后变为M状态,其他通过总线嗅探到Cache Line被修改的CPU核心会将自己的对应缓存行状态设置为I</font> <br>
 
 
 > 如果说一个核心更新了数据,广播失效操作和地址,其他核心的缓存被更新为失效,那更新数据的那个核心什么时候把数据再次写入内存呢,按照之前所述'写回'机制,在下次更新数据的时候才会写入,那如果在这个之间,别的核心需要用到这部分数据,看到失效,还是从内存读,这不是还是读不到最新的数据么? <br><br>
-  假设CPU A的Cache Line被标记为M，CPU B的Cache Line被标记为I.此时CPU B需要读取这部分数据,由于Cache Line被标记为I,因此不满足读请求,便通过总线进行广播.这个时候CPU A收到来自总线读(remote read)的请求,其Cache Line状态由M->S,并将数据更新进内存.由于内存中数据已更新为最新,因此CPU B可以将内存中的数据加载到Cache Line中,以满足本地的读请求(local read),并将Cache Line状态由I->S.
+  假设CPU A的Cache Line被标记为M，CPU B的Cache Line被标记为I.此时CPU B需要读取这部分数据,由于Cache Line被标记为I,因此不满足读请求,便通过总线进行广播.这个时候CPU A收到来自总线读(remote read)的请求,其Cache Line状态由M->S,并将数据更新进内存.由于内存中数据已更新为最新,因此CPU B可以将内存中的数据加载到Cache Line中,以满足本地的读请求(local read),并将Cache Line状态由I->S.<br>
+  当然,这块的实现中,不同的CPU实现会有不同的方式,也其他的实现方式比如:核心B想要读数据,通过总线,从核心A来读取.不同的CPU架构有不同实现而已.
 
 [![gs6VxS.png](https://z3.ax1x.com/2021/05/14/gs6VxS.png)](https://imgtu.com/i/gs6VxS)
 
