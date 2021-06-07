@@ -237,6 +237,14 @@ public class ConfigFileApplicationListener implements EnvironmentPostProcessor, 
 这个监听器默认的从注释中<ul>标签所示的几个位置加载配置文件,并将其加入上下文的environment变量中.
 
 
+####	2.1.4	启动时通过nacos加载远程配置的原理
+
+ConfigFileApplicationListener的onApplicationEnvironmentPreparedEvent方法会通过Spring SPI加载所有的EnvironmentPostProcessor实现类,这里就会加载尽在nacos通过spring.factories接入进来的一个processor
+[![20dUvF.png](https://z3.ax1x.com/2021/06/07/20dUvF.png)](https://imgtu.com/i/20dUvF)
+
+而NacosConfigEnvironmentProcessor的postProcessEnvironment方法则会完成通过nacos配置中心加载远端配置的工作.
+
+
 ##	3.	初始化应用上下文
 
 ```
