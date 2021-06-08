@@ -84,3 +84,7 @@ jmap -dump:live,format=b,file=文件名 [服务进程ID]
 ``
 
 
+<br>
+**<font size="4">注意!!!!</font>** <br>
+
+<font color="red">jmap不要线上直接使用,说通过jmap分析,那只是口头上的理论可行方案,jmap比较耗时,而且为了进行堆一致性快照信息dump,是会暂停进程的运行的.线上服务直接jmap,是不想过了吗???,线上服务,可以考虑先摘掉服务,然后再通过jmap来dump,或者使用gcore命令来进行dump,比jmap快很多,然后再通过工具分析.</font>
