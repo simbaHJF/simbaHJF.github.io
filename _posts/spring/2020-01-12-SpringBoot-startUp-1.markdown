@@ -140,3 +140,5 @@ ApplicationListener是spring的事件监听器,典型的观察者模式,通过Ap
 具体初始化的ApplicationListener实例包括如下:
 ![lTrZVA.png](https://s2.ax1x.com/2020/01/12/lTrZVA.png)
 ![lTcKoj.png](https://s2.ax1x.com/2020/01/12/lTcKoj.png)
+
+这里有一个重要的Listener,即ConfigFileApplicationListener,它同时实现了EnvironmentPostProcessor接口,ConfigFileApplicationListener内部会对ApplicationEnvironmentPreparedEvent事件进行监听,事件触发后会调用postProcessEnvironment方法,该方法内部完成对配置文件kv属性的读取,注入environment中.<br>

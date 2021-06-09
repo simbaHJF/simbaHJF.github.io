@@ -39,7 +39,7 @@ public ConfigurableApplicationContext run(String... args) {
 		ApplicationArguments applicationArguments = new DefaultApplicationArguments(args);
 
 		//构造应用上下文环境,这里会完成对application.properties文件中属性配置的load工作
-		//如果采用的是外部配置,如配置在nacos中,也是在这里完成的,原理是通过spring的spi增加NacosConfigEnvironmentProcessor处理器,在该处理器内部完成读取nacos中的配置
+		//如果采用的是外部配置
 		ConfigurableEnvironment environment = prepareEnvironment(listeners, applicationArguments);
 
 		//处理需要忽略的bean
