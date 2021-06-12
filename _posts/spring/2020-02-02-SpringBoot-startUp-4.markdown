@@ -879,10 +879,6 @@ protected BeanWrapper instantiateBean(final String beanName, final RootBeanDefin
 }
 ```
 
-可以看到getInstantiationStrategy().instantiate处的调用,典型的策略模式的设计模式.
-
-这里使用CGLIB进行Bean的实例化.CGLIB是一个常用的字节码生成器的类库,其提供了一系列的API来提供生成和转换Java字节码的功能.在Spring AOP中同样也是可以使用CGLIB对Java的字节码进行增强.
-
 在IoC容器中,使用SimpleInstantiationStrategy类.这个类是Spring用来生成Bean对象的默认类,它提供了两种实例化Java对象的方法,一种是通过BeanUtils,它使用的是JVM的反射功能,一种是通过CGLIB来生成.
 
 getInstantiationStrategy()方法获取到CglibSubclassingInstantiationStrategy实例,instantiate()是CglibSubclassingInstantiationStrategy类的父类SimpleInstantiationStrategy实现的.
