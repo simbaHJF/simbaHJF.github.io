@@ -71,8 +71,8 @@ HashedWheelTimeout中的核心字段如下:
 currentTime（创建 HashedWheelTimeout 的时间） + delay（任务延迟时间） - startTime（HashedWheelTimer 的启动时间），时间单位为纳秒
 ``
 
-* state(volatile类型),只定时任务当前所处状态,可选的有三个,分别是INT(0),CANCELLED(1)和EXPIRED(2).另外,还有一个STATE_UPDATER字段(AtomicIntegerFieldUpdater类型)实现state状态变更的原子性.
-* remainingRounds(long类型),指当前任务剩余的始终周期数.时间轮所能表示的时间长度是有限的,在任务到期时间与当前时刻的时间差超过时间轮单圈能表示的时长的情况下,就出现了套圈的情况,需要该字段值表示剩余的始终周期.
+* state(volatile类型),只定时任务当前所处状态,可选的有三个,分别是INIT(0),CANCELLED(1)和EXPIRED(2).另外,还有一个STATE_UPDATER字段(AtomicIntegerFieldUpdater类型)实现state状态变更的原子性.
+* remainingRounds(long类型),指当前任务剩余的时钟周期数.时间轮所能表示的时间长度是有限的,在任务到期时间与当前时刻的时间差超过时间轮单圈能表示的时长的情况下,就出现了套圈的情况,需要该字段值表示剩余的时钟周期.
 
 HashedWheelTimeout中的核心方法有:
 * isCancelled(),isExpired(),state()方法,主要用于检查当前HashedWheelTimeout状态.
