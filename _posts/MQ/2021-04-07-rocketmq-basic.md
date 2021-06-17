@@ -41,7 +41,9 @@ tags:
 * NameServer, 负责管理集群中所有Broker的信息. 部署方式上,采用集群部署方式,以做到高可用性.NameServer集群中每台机器之间都是无状态对等节点,存储全部Broker集群信息,彼此之间没有通信关系.NameServer本身是无状态的,也就是说NameServer中的Broker,Topic等状态信息不会持久化存储,都是由各个角色定时上报并存储到内存中的.
 * Broker集群, 主从架构多副本, 用于实现MQ的核心功能. 每个Broker(包括master和slave)启动时,需要向所有的NameServer进行注册.Broker向每个NameServer建立TCP长连接
 * 生产者系统, 向MQ中生产消息的业务系统. 定时发送请求到NameServer去拉取最新的集群Broker信息.
+	> 每个Producer会向自己关心的topic下的所有相关的broker建立长链接,而这个topic->broker的路由信息是从nameserver获取的,定时拉取
 * 消费者系统, 通过MQ来消费消息的业务系统. 定时发送请求到NameServer去拉取最新的集群Broker信息
+	> 每个Consumer会向自己关心的topic下的所有相关的broker建立长链接发送心跳,向Broker注册,而这个topic->broker的路由信息是从nameserver获取的,定时拉取.正是在Broker上的注册,所以Broker中会有Consumer的列表信息,当某个Consumer新加入或者宕机之后,Broker会感知到然后通知给订阅相同Topic下的Consumer,进行Rebalance.
 
 
 
