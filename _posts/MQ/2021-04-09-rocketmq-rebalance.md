@@ -46,7 +46,7 @@ Rebalance(再均衡)机制指的是:将一个Topic下的多个队列(或称之�
 
 本文中,暂且将队列信息和消费者组信息称之为``Rebalance元数据``,Broker负责维护这些元数据,并在二者信息发生变化时,以某种通知机制告诉消费者组下的所有实例,需要进行Rebalance.从这个角度说,Broker在Rebalance过程中,是一个协调者或者说通知者的角色,真正执行Rebalance的过程,是在Consumer客户端完成的.<br>
 
-Broker之所以能维护Rebalance元数据,以及通知消费组下的所有实例,是因为每个消费实例与每个其消费Topic下对应的Broker都建立有TCP长连接.<br>
+Broker之所以能维护Rebalance元数据,以及通知消费组下的所有实例,是因为每个消费实例与每个其消费Topic下对应的Broker都建立有TCP长连接,因此可收集维护消费者组信息.另外Borker Server也与NameServer建立有连接,也存储主题和队列信息等元数据<br>
 
 
 
@@ -148,6 +148,8 @@ public void doRebalance(final boolean isOrder) {
 **<font size="4">单个Topic的Rebalance流程</font>** <br>
 
 1. 获得Rebalance元数据信息
+    1. 对于队列信息,会从之前的缓存的Topic路由信息中获取;Topic路由信息会定时的进行更新
+    2. 对于消费者组实例信息,会发送请求给任意一个Broker进行获取
 2. 进行队列分配
 	> 这里分配策略使用AllocateMessageQueueStrategy接口表示,提供了多种实现
 3. 分配结果处理

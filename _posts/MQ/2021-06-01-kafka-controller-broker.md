@@ -23,7 +23,10 @@ tags:
 <br>
 [二. Controller Broker是如何被选出来的](#jump2)
 <br>
-
+[三. 分区leader的选举](#jump3)
+<br>
+[四. 元数据同步](#jump4)
+<br>
 
 
 
@@ -76,4 +79,9 @@ leader选举和对应的选举策略有关,这里介绍一个基本的OftlinePar
 
 
 
+<br><br>
+## <span id="jump8">四. 元数据同步</span>
 
+Controller Broker会监控最终集群中的其他broker,通过定时与各个Broker通信收集元信息,然后定时的将元信息发送给各个Broker,因此,集群中的每个Broker实例中其实都是会缓存集群元信息的.<br>
+
+为什么要这么做呢,这是为了Consumer加入时,可以从任意一个Broker中获取到topic-partition的元信息.也正是因为broker中缓存有元信息,因此在新的Consumer加入或退出,或者是topic队列分区扩容时,能够以元数据信息组织相应group下的所有consumer进行rebalance(GroupCoordinator的工作,它也是一个Broker)<br>
