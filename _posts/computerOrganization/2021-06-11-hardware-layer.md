@@ -114,7 +114,9 @@ Store屏障 + Load屏障<br>
 
 [![2fNiKs.png](https://z3.ax1x.com/2021/06/11/2fNiKs.png)](https://imgtu.com/i/2fNiKs)
 
-内存屏障,Acquire屏障,Release屏障,但是都是有基础的StoreStore屏障,StoreLoad屏障所组成的,来避免指令的重排序.<br>
+内存屏障,Acquire屏障,Release屏障,但是都是由基础的LoadLoad屏障,LoadStore屏障,StoreStore屏障,StoreLoad屏障所组成的,来避免指令的重排序.<br>
+
+Acquire屏障其实就是LoadLoad屏障 + LoadStore屏障, Release屏障其实就是StoreLoad屏障 + StoreStore屏障. <br>
 
 StoreStore屏障,会强制让写数据的操作全部按照顺序写入写缓冲器里,他不会让第一个写到写缓冲器里,然后第二个写直接修改高速缓存了.<br>
 
